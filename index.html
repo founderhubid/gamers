@@ -261,6 +261,11 @@
   .rp-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--rp-ink-dim); }
   .rp-field input, .rp-field select { font-family: var(--rp-sans); font-size: 13.5px; color: var(--rp-ink); border: 1px solid var(--rp-border); border-radius: 8px; padding: 8px 10px; background: var(--rp-input-bg); }
   .rp-field input:focus, .rp-field select:focus { outline: none; border-color: var(--rp-navy); box-shadow: 0 0 0 3px var(--rp-focus-ring); }
+  /* Daftar pilihan (popup) punya <select> dirender native oleh OS/browser,
+     jadi warnanya tidak ikut var(--rp-input-bg) yang transparan — harus
+     dikasih warna solid sendiri, kalau tidak teksnya jadi putih-di-atas-
+     putih (tidak kebaca) waktu mode gelap. */
+  select option { background: var(--rp-surface-solid); color: var(--rp-ink); }
   .rp-field-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .rp-pill { flex: 1; min-width: 62px; padding: 7px 4px; border-radius: 8px; border: 1px solid var(--rp-border); background: transparent; color: var(--rp-ink-dim); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
   .rp-pill.is-on { background: var(--rp-chip-bg); color: var(--rp-chip-text); border-color: transparent; }
@@ -787,9 +792,11 @@ body:before{
   backdrop-filter:blur(14px);
 }
 
-/* User menu (avatar + identitas di pojok kanan atas) */
+/* User menu (avatar + identitas di pojok kanan atas) — dibikin lebih
+   ringkas/kecil, termasuk di layar laptop/desktop. */
 .rp-user-trigger{
-  padding:5px 14px 5px 5px;
+  padding:4px 12px 4px 4px;
+  gap:8px;
   box-shadow:0 12px 28px -16px rgba(0,0,0,.8);
   transition:.16s ease;
 }
@@ -797,7 +804,15 @@ body:before{
   transform:translateY(-1px);
 }
 .rp-user-avatar{
-  width:34px;height:34px;
+  width:26px;height:26px;
+  font-size:10.5px;
+}
+.rp-user-name{
+  font-size:11.5px;
+  max-width:120px;
+}
+.rp-user-role{
+  font-size:9px;
 }
 .rp-user-popover{
   border-radius:16px;
@@ -1088,7 +1103,12 @@ const ICONS = {
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
 };
 function getTheme() {
-  try { return localStorage.getItem("rp_theme") || "dark"; } catch (e) { return "dark"; }
+  // Default di sini HARUS sama dengan default di script bootstrap paling
+  // awal (early-theme script di <head>), yaitu "light". Sebelumnya beda
+  // ("dark" di sini) sehingga saat tema belum pernah disetel, toggle
+  // mengira tema aktif "dark" padahal yang benar-benar tampil "light" —
+  // akibatnya klik pertama kelihatan tidak ngefek (baru benar di klik ke-2).
+  try { return localStorage.getItem("rp_theme") || "light"; } catch (e) { return "light"; }
 }
 function getAvatarKey() { return `rp_avatar_${(currentUser && currentUser.username) || "guest"}`; }
 function getAvatarDataUrl() { try { return localStorage.getItem(getAvatarKey()) || ""; } catch (e) { return ""; } }
@@ -1346,7 +1366,7 @@ function doLogin(){
     const match=dir.cashiers.find(c=>String(c.username||"").trim().toLowerCase()===username && String(c.password||"")===password);
     if(!match){showLogin("Username atau password salah.");return;}
     const branchName=(dir.branches.find(b=>b.id===match.branchId)||{}).name||"Cabang";
-    currentUser={username,role:"kasir",label:`Kasir — ${branchName}`,branchId:match.branchId};
+    currentUser={username,role:"kasir",label:branchName,branchId:match.branchId};
   }
   try{sessionStorage.setItem("rp_user",JSON.stringify(currentUser));}catch(e){}
   startApp();
@@ -1402,7 +1422,15 @@ const loadedSheets = new Set();
 function applyRawCache() {
   const incoming = normalize(rawCache);
   state.settings = incoming.settings;
-  if (currentUser && currentUser.role === "kasir") {
+  // PENTING: sheet-sheet lain (Units, Transactions, dst) bisa saja datang
+  // dari Firestore SEBELUM sheet "Settings" (yang berisi daftar akun kasir)
+  // selesai dimuat — urutan onSnapshot tidak dijamin sesuai array SHEETS.
+  // Kalau validasi akun kasir dijalankan sebelum Settings benar-benar
+  // termuat, daftar kasirnya masih kosong/default sehingga akun yang
+  // sebenarnya valid bisa salah dianggap "sudah tidak berlaku" dan
+  // ke-logout paksa di tengah proses loading (kelihatan seperti macet/
+  // muter terus). Makanya cek ini ditunda sampai Settings sudah pasti masuk.
+  if (currentUser && currentUser.role === "kasir" && loadedSheets.has("Settings")) {
     const stillValid = cashiersWithFallback(incoming.settings.branches, incoming.settings.cashiers)
       .some(c => String(c.username||"").trim().toLowerCase() === currentUser.username && c.branchId === currentUser.branchId);
     if (!stillValid) { logoutApp(); flash("Akun kasir ini sudah tidak berlaku, hubungi admin."); return; }
@@ -1721,7 +1749,7 @@ function openQueueModal(prefUnitId) {
 }
 
 /* =========================================================
-   Detail modal — Dasbor & Laporan (klik kartu/chart)
+   Detail modal — Dashboard & Laporan (klik kartu/chart)
 ========================================================= */
 function openDashTxModal() {
   const todayStr = nowJakarta().toDateString();
@@ -2179,7 +2207,7 @@ function submitInventory(id) {
    Render — Shell
 ========================================================= */
 const NAV = [
-  { id: "dashboard", label: "Dasbor", icon: "grid" },
+  { id: "dashboard", label: "Dashboard", icon: "grid" },
   { id: "units", label: "Unit PS", adminLabel: "Cabang & Unit", icon: "gamepad" },
   { id: "riwayat", label: "Riwayat Sewa", icon: "history" },
   { id: "member", label: "Pelanggan", icon: "users" },
@@ -2217,7 +2245,6 @@ function renderAll() {
         ${NAV.filter(n=>!n.adminOnly||isAdmin()).map(n => `<button class="rp-nav-item${currentTab===n.id?" is-active":""}" onclick="setTab('${n.id}')">${icon(n.icon,18)}<span class="rp-nav-label">${esc(isAdmin()&&n.adminLabel?n.adminLabel:n.label)}</span></button>`).join("")}
       </nav>
       <div class="rp-sidebar-foot">
-        <div class="rp-sync-row"><span class="rp-user-badge">${esc(currentUser?.label||"")}</span></div>
         <div class="rp-sync-row"><span id="sync-dot" class="rp-sync-dot"></span><span id="sync-label">Tersinkron</span></div>
         <button class="rp-refresh-btn" onclick="refreshData()">Segarkan data</button>
         <button class="rp-refresh-btn" onclick="logoutApp()">Keluar</button>
@@ -2296,7 +2323,7 @@ function renderDashboard() {
 
   return `
     <div class="rp-page">
-      <header class="rp-page-head"><h1>Dasbor Kasir</h1><p class="rp-sub">Ringkasan hari ini, ${fmtDateID(new Date())}</p></header>
+      <header class="rp-page-head"><h1>Dashboard Kasir</h1><p class="rp-sub">Ringkasan hari ini, ${fmtDateID(new Date())}</p></header>
       ${branchSwitcherHtml()}
       <div class="rp-stat-row">
         <div class="rp-stat-card rp-clickable" onclick="openDashTxModal()"><span class="rp-stat-label">Pendapatan hari ini</span><strong class="rp-mono rp-stat-value">${rupiah(todayRevenue)}</strong></div>
