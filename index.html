@@ -870,6 +870,17 @@ body:before{
     width:min(410px,calc(100vw - 24px));
     border-radius:16px;
   }
+  .rp-ruled-head{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:4px;
+  }
+  .rp-ruled-head:after{
+    display:none;
+  }
+  .rp-ruled-head .rp-dim{
+    display:block;
+  }
 }
 @media (max-width:390px){
   .rp-unit-grid{grid-template-columns:1fr}
@@ -1899,6 +1910,78 @@ function modalShell(title, bodyHtml) {
   </div>`;
 }
 
+/* ===================== Reset data (fitur tersembunyi) =====================
+   Sengaja tidak ada petunjuk visual di UI manapun. Diaktifkan dengan klik
+   5x berturut-turut (dalam <1.2 detik) pada judul halaman "Laba-Rugi". */
+let _resetTitleClicks = 0;
+let _resetTitleTimer = null;
+function handleResetTitleClick() {
+  clearTimeout(_resetTitleTimer);
+  _resetTitleClicks += 1;
+  _resetTitleTimer = setTimeout(() => { _resetTitleClicks = 0; }, 1200);
+  if (_resetTitleClicks >= 5) {
+    _resetTitleClicks = 0;
+    openResetDataModal();
+  }
+}
+const RESET_CATEGORIES = [
+  { key: "Transactions", label: "Riwayat transaksi / sewa selesai" },
+  { key: "ActiveRentals", label: "Sewa yang sedang berjalan" },
+  { key: "Queue", label: "Antrian" },
+  { key: "Expenses", label: "Pengeluaran" },
+  { key: "Members", label: "Data pelanggan" },
+  { key: "Inventory", label: "Stok & servis" },
+  { key: "Units", label: "Unit PS" },
+  { key: "Settings", label: "Cabang, tarif dasar, & akun kasir (kembali ke setelan awal)" },
+];
+function openResetDataModal() {
+  const rows = RESET_CATEGORIES.map(c => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;cursor:pointer;">
+      <input type="checkbox" class="reset-cat-chk" value="${c.key}">
+      <span>${esc(c.label)}</span>
+    </label>`).join("");
+  openModal(modalShell("Reset Data", `
+    <p class="rp-sub" style="margin-top:-4px;">Pilih data yang mau dihapus permanen. Tindakan ini tidak bisa dibatalkan.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;padding:8px 0;border-bottom:1px solid var(--rp-border);margin-bottom:2px;cursor:pointer;">
+      <input type="checkbox" id="reset-cat-all" onchange="document.querySelectorAll('.reset-cat-chk').forEach(c=>c.checked=this.checked)">
+      <span>Pilih semua</span>
+    </label>
+    ${rows}
+    <label class="rp-field" style="margin-top:14px;">
+      <span>Ketik <strong>HAPUS</strong> untuk konfirmasi</span>
+      <input id="reset-confirm-text" placeholder="HAPUS" autocomplete="off">
+    </label>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
+      <button class="rp-btn" style="background:var(--rp-red);color:var(--rp-btn-text);" onclick="executeDataReset()">Reset sekarang</button>
+    </div>
+  `));
+}
+async function executeDataReset() {
+  const selected = Array.from(document.querySelectorAll(".reset-cat-chk:checked")).map(c => c.value);
+  if (!selected.length) { flash("Pilih minimal 1 jenis data dulu."); return; }
+  const confirmText = (document.getElementById("reset-confirm-text")?.value || "").trim().toUpperCase();
+  if (confirmText !== "HAPUS") { flash('Ketik "HAPUS" persis untuk konfirmasi.'); return; }
+  closeModal();
+  flash("Menghapus data…");
+  try {
+    for (const key of selected) {
+      if (key === "Settings") {
+        await docRef("Settings").set({ rows: [{
+          businessName: "Rental PS Saya", defaultRate: 5000,
+          branches: [{ id: "branch-main", name: "Cabang Utama" }], cashiers: []
+        }] });
+      } else {
+        await docRef(key).set({ rows: [] });
+      }
+    }
+    flash("Data terpilih berhasil direset.");
+  } catch (e) {
+    console.error(e);
+    flash("Gagal mereset data — cek koneksi internet.");
+  }
+}
+
 function openStartModal(unitId) {
   const unit = state.units.find(u => u.id === unitId);
   if (!unit) return;
@@ -2771,7 +2854,7 @@ function renderLaporan() {
       <div class="rp-page">
         <header class="rp-page-head rp-page-head-row">
           <div>
-            <h1>Laba-Rugi</h1>
+            <h1 onclick="handleResetTitleClick()">Laba-Rugi</h1>
             <p class="rp-sub">${periodLabel} · ${esc(laporanBranchLabel())}</p>
           </div>
           <div class="rp-head-tools">
@@ -2838,7 +2921,7 @@ function renderLaporan() {
           <h1>Laporan</h1>
           <p class="rp-sub">Ringkasan pendapatan bulan terpilih · ${esc(laporanBranchLabel())}</p>
         </div>
-        <button class="rp-btn rp-btn-ghost" onclick="openLabaRugiProtected()">Update Laba-Rugi</button>
+        <button class="rp-btn rp-btn-ghost" onclick="openLabaRugiProtected()">Klik Untuk Update Laba-Rugi</button>
       </header>
 
       <div class="rp-field-row" style="margin-bottom:18px;align-items:flex-end;">
