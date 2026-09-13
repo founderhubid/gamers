@@ -1255,6 +1255,15 @@ function normalize(raw) {
     password: String(c.password || ""), branchId: String(c.branchId)
   }));
 
+  // Kredensial admin sekarang disimpan di dokumen Settings (Firestore),
+  // bukan ditulis langsung di source HTML. Fallback admin/admin123 dipakai
+  // HANYA kalau Settings belum pernah di-set (instalasi baru), supaya tetap
+  // bisa login pertama kali — setelah itu ganti passwordnya dari Firestore.
+  const admin = {
+    username: String(settingsRow.adminUsername || "admin").trim().toLowerCase(),
+    password: String(settingsRow.adminPassword || "admin123")
+  };
+
   const units = (raw.Units || []).map(u => ({
     ...u, rate: Number(u.rate) || 0,
     branchId: u.branchId || branches[0].id,
@@ -1293,7 +1302,7 @@ function normalize(raw) {
     branchId: e.branchId || branches[0].id, branchName: e.branchName || (branches.find(b=>b.id===(e.branchId||branches[0].id))||branches[0]).name
   }));
 
-  const settings = { businessName, defaultRate, branches, cashiers };
+  const settings = { businessName, defaultRate, branches, cashiers, admin };
   return { settings, units, activeRentals, transactions, members, inventory, queue, expenses };
 }
 
@@ -1301,7 +1310,7 @@ function normalize(raw) {
    State
 ========================================================= */
 let state = {
-  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [] },
+  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], admin: { username: "admin", password: "admin123" } },
   units: [], activeRentals: {}, transactions: [], members: [], inventory: [], queue: [], expenses: []
 };
 let currentTab = "dashboard";
@@ -1311,9 +1320,8 @@ let firestoreStarted = false;
 let currentUser = null;
 let selectedBranchId = null;
 
-const APP_USERS = {
-  admin: { password: "admin123", role: "admin", label: "Administrator" }
-};
+const DEFAULT_ADMIN = { username: "admin", password: "admin123" };
+function getAdminAccount(){ return (state.settings && state.settings.admin) || DEFAULT_ADMIN; }
 // Akun kasir sekarang dikelola per cabang lewat menu admin "Cabang & Unit"
 // dan disimpan di state.settings.cashiers (ikut tersinkron ke Firestore).
 // Selama admin belum menambahkan akun apapun, akun lama (kasir/kasir123)
@@ -1342,18 +1350,37 @@ function preloadLoginDirectory(){
     const branches=(Array.isArray(row.branches)&&row.branches.length)?row.branches.filter(b=>b&&b.id&&b.name):[];
     window._loginDirectory={
       branches: branches.length?branches:[{id:"branch-main",name:"Cabang Utama"}],
-      cashiers: Array.isArray(row.cashiers)?row.cashiers:[]
+      cashiers: Array.isArray(row.cashiers)?row.cashiers:[],
+      admin: {
+        username: String(row.adminUsername || DEFAULT_ADMIN.username).trim().toLowerCase(),
+        password: String(row.adminPassword || DEFAULT_ADMIN.password)
+      }
     };
   }).catch(()=>{
-    window._loginDirectory={branches:[{id:"branch-main",name:"Cabang Utama"}],cashiers:[]};
+    window._loginDirectory={branches:[{id:"branch-main",name:"Cabang Utama"}],cashiers:[],admin:DEFAULT_ADMIN};
   });
 }
 function getLoginDirectory(){
-  if (ready) return { branches:getBranches(), cashiers:cashiersWithFallback(getBranches(), getCashiers()) };
-  const dir = window._loginDirectory || {branches:[{id:"branch-main",name:"Cabang Utama"}],cashiers:[]};
-  return { branches:dir.branches, cashiers:cashiersWithFallback(dir.branches, dir.cashiers) };
+  if (ready) return { branches:getBranches(), cashiers:cashiersWithFallback(getBranches(), getCashiers()), admin:getAdminAccount() };
+  const dir = window._loginDirectory || {branches:[{id:"branch-main",name:"Cabang Utama"}],cashiers:[],admin:DEFAULT_ADMIN};
+  return { branches:dir.branches, cashiers:cashiersWithFallback(dir.branches, dir.cashiers), admin: dir.admin||DEFAULT_ADMIN };
 }
-function getCurrentUser(){ try { const r=sessionStorage.getItem("rp_user"); return r?JSON.parse(r):null; } catch(e){return null;} }
+// Sesi login sekarang disimpen di localStorage (bukan sessionStorage) biar
+// tetap login walau tab/browser ditutup. Sebagai gantinya, sesi otomatis
+// dianggap habis kalau tidak ada aktivitas apa pun selama IDLE_LIMIT_MS
+// (lihat trackActivity() & startIdleWatcher() di bawah).
+const IDLE_LIMIT_MS = 8 * 60 * 60 * 1000; // 8 jam
+function getLastActive(){ const v = parseInt(localStorage.getItem("rp_user_last_active")||"0", 10); return isNaN(v) ? 0 : v; }
+function touchLastActive(){ try{ localStorage.setItem("rp_user_last_active", String(Date.now())); }catch(e){} }
+function isSessionExpired(){ const last = getLastActive(); return last>0 && (Date.now()-last) > IDLE_LIMIT_MS; }
+function getCurrentUser(){
+  try {
+    const r=localStorage.getItem("rp_user");
+    if(!r) return null;
+    if(isSessionExpired()){ localStorage.removeItem("rp_user"); localStorage.removeItem("rp_user_last_active"); return null; }
+    return JSON.parse(r);
+  } catch(e){return null;}
+}
 function isAdmin(){ return currentUser?.role==="admin"; }
 function showLogin(errorMsg=""){
   currentUser=null; ready=false;
@@ -1368,21 +1395,45 @@ function showLogin(errorMsg=""){
 function doLogin(){
   const username=(document.getElementById("login-username")?.value||"").trim().toLowerCase();
   const password=document.getElementById("login-password")?.value||"";
-  if(username==="admin"){
-    const admin=APP_USERS.admin;
-    if(admin.password!==password){showLogin("Username atau password salah.");return;}
-    currentUser={username:"admin",role:"admin",label:admin.label,branchId:null};
+  const dir=getLoginDirectory();
+  if(username===dir.admin.username){
+    if(dir.admin.password!==password){showLogin("Username atau password salah.");return;}
+    currentUser={username:dir.admin.username,role:"admin",label:"Administrator",branchId:null};
   } else {
-    const dir=getLoginDirectory();
     const match=dir.cashiers.find(c=>String(c.username||"").trim().toLowerCase()===username && String(c.password||"")===password);
     if(!match){showLogin("Username atau password salah.");return;}
     const branchName=(dir.branches.find(b=>b.id===match.branchId)||{}).name||"Cabang";
     currentUser={username,role:"kasir",label:branchName,branchId:match.branchId};
   }
-  try{sessionStorage.setItem("rp_user",JSON.stringify(currentUser));}catch(e){}
+  try{localStorage.setItem("rp_user",JSON.stringify(currentUser));}catch(e){}
+  touchLastActive();
   startApp();
 }
-function logoutApp(){try{sessionStorage.removeItem("rp_user");}catch(e){} currentUser=null;ready=false;currentTab="dashboard";hideTrendHover();renderUserMenu();showLogin();}
+function logoutApp(){try{localStorage.removeItem("rp_user");localStorage.removeItem("rp_user_last_active");}catch(e){} currentUser=null;ready=false;currentTab="dashboard";hideTrendHover();renderUserMenu();showLogin();}
+
+// Update jam "terakhir aktif" tiap ada interaksi user (klik, ketik, scroll,
+// sentuh), di-throttle 60 detik biar gak nulis localStorage tiap gerakan
+// mouse. Dipakai idle watcher di bawah buat auto-logout 8 jam tanpa aktivitas.
+let _lastActivityWrite = 0;
+function trackActivity(){
+  if(!currentUser) return;
+  const now = Date.now();
+  if(now - _lastActivityWrite < 60000) return;
+  _lastActivityWrite = now;
+  touchLastActive();
+}
+["click","keydown","mousemove","scroll","touchstart"].forEach(evt=>{
+  document.addEventListener(evt, trackActivity, { passive:true });
+});
+// Cek tiap menit: kalau lagi login dan sudah idle lebih dari 8 jam, logout
+// otomatis. Ini nutup kasus tab dibiarkan terbuka tanpa disentuh (bukan cuma
+// dicek pas buka/refresh halaman lewat getCurrentUser()).
+setInterval(()=>{
+  if(currentUser && isSessionExpired()){
+    logoutApp();
+    flash("Sesi berakhir karena tidak ada aktivitas selama 8 jam, silakan login lagi.");
+  }
+}, 60000);
 function startApp(){
   if(!currentUser){showLogin();return;}
   renderUserMenu();
@@ -1391,7 +1442,19 @@ function startApp(){
     <div class="rp-loading-text">Menyiapkan sistem<span class="rp-loading-dots"><i></i><i></i><i></i></span></div>
     <div class="rp-loading-bar"><div class="rp-loading-bar-fill" id="loading-bar-fill"></div></div>
     <div class="rp-loading-count" id="loading-count">Menghubungkan ke database…</div></div>`;
-  if(!firestoreStarted){firestoreStarted=true;initFirestoreListeners();} else if(ready) renderAll();
+  if(!firestoreStarted){
+    firestoreStarted=true;initFirestoreListeners();
+  } else {
+    // Login ulang di sesi yang sama (tanpa refresh): listener Firestore
+    // sudah jalan dari sesi sebelumnya dan datanya masih tersimpan di
+    // loadedSheets/state, tapi `ready` sempat di-reset ke false saat
+    // logout (lihat showLogin/logoutApp). Kalau kita cuma cek `ready`
+    // di sini, nilainya masih stale (false) sehingga tidak ada cabang
+    // manapun yang jalan dan layar loading nyangkut sampai di-refresh.
+    // Makanya recompute langsung dari loadedSheets yang datanya valid.
+    if (loadedSheets.size >= SHEETS.length) ready = true;
+    if (ready) renderAll();
+  }
 }
 function getBranches(){return Array.isArray(state.settings.branches)&&state.settings.branches.length?state.settings.branches:[{id:"branch-main",name:"Cabang Utama"}];}
 function getBranchName(id){return (getBranches().find(b=>b.id===id)||{}).name||"Cabang Utama";}
@@ -3178,10 +3241,11 @@ function wireTabExtras() {
 ========================================================= */
 currentUser=getCurrentUser();
 preloadLoginDirectory().finally(()=>{
-  const isValidAdminSession = currentUser && currentUser.role==="admin" && currentUser.username==="admin";
+  const dirAdmin = (window._loginDirectory||{}).admin || DEFAULT_ADMIN;
+  const isValidAdminSession = currentUser && currentUser.role==="admin" && currentUser.username===dirAdmin.username;
   const isValidKasirSession = currentUser && currentUser.role==="kasir" && currentUser.branchId
     && cashiersWithFallback((window._loginDirectory||{}).branches, (window._loginDirectory||{}).cashiers).some(c=>c.username===currentUser.username && c.branchId===currentUser.branchId);
-  if (isValidAdminSession || isValidKasirSession) startApp(); else showLogin();
+  if (isValidAdminSession || isValidKasirSession) { touchLastActive(); startApp(); } else showLogin();
 });
 </script>
 </body>
