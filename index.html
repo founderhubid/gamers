@@ -1112,6 +1112,7 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  printer: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/>',
 };
 function getTheme() {
   // Default di sini HARUS sama dengan default di script bootstrap paling
@@ -1656,12 +1657,95 @@ function finishRental(unitId, payment, discount, frozenMs) {
     if (m) { m.visits = (m.visits || 0) + 1; m.totalSpent = (m.totalSpent || 0) + amount; }
   }
 
-  closeModal();
   renderAll();
   persistTransactions(); persistActive(); persistUnits();
   if (session.memberId) persistMembers();
   flash(`Sewa ${unit.name} selesai — ${rupiah(amount)}`);
   maybeNotifyQueueForUnit(unitId, unit.name);
+  openReceiptModal(trx);
+}
+
+// Struk ditampilkan begitu pembayaran selesai dicatat. Kalau penyewanya
+// bukan pelanggan terdaftar (memberId kosong = tamu biasa), kasih opsi
+// buat langsung nyimpen dia ke daftar pelanggan tanpa harus buka menu lain.
+function openReceiptModal(trx) {
+  const isGuest = !trx.memberId;
+  openModal(modalShell(`Struk pembayaran`, `
+    <div class="rp-receipt">
+      <div class="rp-receipt-row"><span>${esc(state.settings.businessName)}</span><span>${esc(trx.branchName || "")}</span></div>
+      <div class="rp-receipt-row"><span>Tanggal</span><span>${esc(fmtDateID(trx.end))}, ${esc(fmtTimeID(trx.end))}</span></div>
+      <div class="rp-receipt-line"></div>
+      <div class="rp-receipt-row"><span>Penyewa</span><strong>${esc(trx.customerName)}</strong></div>
+      <div class="rp-receipt-row"><span>Unit</span><strong>${esc(trx.unitName)}</strong></div>
+      <div class="rp-receipt-row"><span>Durasi</span><strong class="rp-mono">${fmtHMS(trx.minutes * 60000)}</strong></div>
+      <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
+      ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
+      <div class="rp-receipt-line"></div>
+      <div class="rp-receipt-row rp-receipt-total"><span>Total dibayar</span><strong class="rp-mono">${rupiah(trx.amount)}</strong></div>
+    </div>
+    <div id="receipt-save-customer">${isGuest ? `
+      <p class="rp-dim" style="margin-top:12px;">${esc(trx.customerName)} belum jadi pelanggan terdaftar. Simpan ke daftar pelanggan?</p>
+      <label class="rp-field"><span>No. HP</span><input id="receipt-guest-phone" placeholder="08xxxxxxxxxx" /></label>
+      <button class="rp-btn rp-btn-ghost" style="width:100%" onclick="saveNewCustomerFromReceipt('${trx.id}')">${icon("users", 14)} Simpan sebagai pelanggan baru</button>
+    ` : ""}</div>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="printReceipt('${trx.id}')">${icon("printer", 14)} Cetak</button>
+      <button class="rp-btn rp-btn-start" style="flex:1" onclick="closeModal()">Selesai</button>
+    </div>
+  `));
+}
+// Cetak dibikin lewat window terpisah (bukan window.print() langsung di
+// halaman utama) supaya hasil print cuma struknya doang — gak ikut kebawa
+// sidebar/menu, dan lebarnya dibikin mirip kertas thermal printer (58/80mm).
+function printReceipt(trxId) {
+  const trx = state.transactions.find(t => t.id === trxId);
+  if (!trx) return;
+  const w = window.open("", "_blank", "width=380,height=600");
+  if (!w) { flash("Popup diblokir browser — izinkan popup buat cetak struk."); return; }
+  const rows = [
+    ["Tanggal", `${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`],
+    ["Penyewa", trx.customerName],
+    ["Unit", trx.unitName],
+    ["Durasi", fmtHMS(trx.minutes * 60000)],
+    ["Metode bayar", trx.payment],
+  ];
+  if (trx.note) rows.push(["Catatan", trx.note]);
+  w.document.write(`<!DOCTYPE html><html><head><title>Struk - ${esc(trx.unitName)}</title><style>
+    @page{ margin: 8mm; }
+    body{ font-family:'Courier New',monospace; font-size:12px; width:280px; margin:0 auto; padding:12px; color:#000; }
+    h1{ font-size:14px; text-align:center; margin:0 0 2px; }
+    .sub{ text-align:center; font-size:11px; margin-bottom:10px; }
+    .row{ display:flex; justify-content:space-between; gap:10px; margin:3px 0; }
+    .line{ border-top:1px dashed #000; margin:8px 0; }
+    .total{ font-size:14px; font-weight:bold; }
+    .foot{ text-align:center; margin-top:14px; font-size:11px; }
+  </style></head><body>
+    <h1>${esc(state.settings.businessName)}</h1>
+    <div class="sub">${esc(trx.branchName || "")}</div>
+    <div class="line"></div>
+    ${rows.map(([l, v]) => `<div class="row"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join("")}
+    <div class="line"></div>
+    <div class="row total"><span>TOTAL</span><span>${rupiah(trx.amount)}</span></div>
+    <div class="foot">Terima kasih!</div>
+  </body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+function saveNewCustomerFromReceipt(trxId) {
+  const trx = state.transactions.find(t => t.id === trxId);
+  if (!trx) return;
+  const phoneInput = document.getElementById("receipt-guest-phone");
+  const phone = (phoneInput?.value || "").trim();
+  if (!phone) { flash("No. HP wajib diisi buat simpan pelanggan."); return; }
+  const id = uid();
+  state.members.push({ id, name: trx.customerName, phone, visits: 1, totalSpent: trx.amount, joined: Date.now() });
+  trx.memberId = id;
+  persistMembers(); persistTransactions();
+  renderAll();
+  const box = document.getElementById("receipt-save-customer");
+  if (box) box.innerHTML = `<p class="rp-dim" style="margin-top:12px;">${icon("info",13)} Tersimpan sebagai pelanggan baru.</p>`;
+  flash("Pelanggan baru disimpan.");
 }
 
 function upsertUnit(unit) {
