@@ -128,10 +128,15 @@
   ::-webkit-scrollbar-thumb { background: var(--rp-scrollbar); border-radius: 8px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--rp-scrollbar-hover); }
 
-  /* Sidebar */
+  /* Sidebar
+     PENTING: sengaja TANPA backdrop-filter blur. Elemen ini position:fixed
+     di HP (jadi bottom-nav) dan selalu nempel di layar selama scroll — kalau
+     pakai blur, browser harus ngitung ulang blur-nya di SETIAP frame scroll
+     karena konten di belakangnya terus berubah. Ini biang utama scroll jadi
+     berat di HP. Background rgba(...,0.92) di atas udah cukup opaque jadi
+     nggak butuh blur buat tetap kebaca. */
   .rp-sidebar {
     width: 236px; flex-shrink: 0; background: var(--rp-sidebar-bg);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-right: 1px solid var(--rp-border);
     display: flex; flex-direction: column; padding: 18px 14px;
   }
@@ -168,7 +173,7 @@
   .rp-ruled-head { font-family: var(--rp-serif); font-size: 13.5px; font-weight: 600; padding-bottom: 6px; margin: 22px 0 12px; border-bottom: 1px solid var(--rp-border); color: var(--rp-ink); }
 
   .rp-stat-row { display: flex; gap: 14px; flex-wrap: wrap; }
-  .rp-stat-card { flex: 1; min-width: 160px; background: var(--rp-surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px 16px; min-width: 0; box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
+  .rp-stat-card { flex: 1; min-width: 160px; background: var(--rp-surface); border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px 16px; min-width: 0; box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
   .rp-stat-label { display: block; font-size: 11.5px; color: var(--rp-ink-dim); margin-bottom: 6px; overflow-wrap: break-word; }
   .rp-stat-value { font-size: 20px; color: var(--rp-ink); overflow-wrap: break-word; font-family: var(--rp-mono); }
 
@@ -226,7 +231,7 @@
   .rp-head-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .rp-page-head-row .rp-btn { width: auto; }
 
-  .rp-table-wrap { overflow-x: auto; border: 1px solid var(--rp-border); border-radius: 10px; background: var(--rp-surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--rp-panel-shadow); }
+  .rp-table-wrap { overflow-x: auto; border: 1px solid var(--rp-border); border-radius: 10px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow); }
   .rp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .rp-table th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--rp-ink-dim); padding: 10px 14px; border-bottom: 1px solid var(--rp-border); background: var(--rp-th-bg); white-space: nowrap; }
   .rp-table td { padding: 10px 14px; border-bottom: 1px solid var(--rp-border); color: var(--rp-ink); }
@@ -275,7 +280,7 @@
   .rp-receipt-line { border-top: 1px dashed var(--rp-border-strong); margin: 4px 0; }
   .rp-receipt-total { font-size: 15px; font-family: var(--rp-mono); }
 
-  .rp-chart-box { border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px; background: var(--rp-surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
+  .rp-chart-box { border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
   .rp-chart-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 12px; color: var(--rp-ink-dim); flex-wrap: wrap; }
   .rp-legend-item { display: flex; align-items: center; gap: 6px; }
   .rp-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
@@ -295,7 +300,6 @@
     background: var(--rp-surface-solid); border: 1px solid var(--rp-border-strong);
     border-radius: 999px; padding: 6px 14px 6px 6px; cursor: pointer;
     box-shadow: 0 8px 20px -8px var(--rp-elevation-shadow);
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     color: var(--rp-ink); transition: background .15s ease, transform .15s ease;
     font-family: var(--rp-sans);
   }
@@ -654,7 +658,6 @@ body:before{
   letter-spacing:.045em;
   text-transform:uppercase;
   padding:4px 9px 4px 7px;
-  backdrop-filter:blur(8px);
 }
 .rp-card-actions{gap:7px}
 .rp-btn{
@@ -674,7 +677,6 @@ body:before{
 }
 .rp-btn-ghost{
   background:rgba(255,255,255,.025);
-  backdrop-filter:blur(8px);
 }
 [data-theme="light"] .rp-btn-ghost{background:rgba(31,43,77,.025)}
 
