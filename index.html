@@ -319,7 +319,7 @@
   .rp-user-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .rp-user-id { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
   .rp-user-name { font-size: 12.5px; font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rp-user-role { font-size: 10px; color: var(--rp-ink-dim); text-transform: uppercase; letter-spacing: .04em; }
+  .rp-user-role { font-size: 9px; color: var(--rp-ink-dim); }
 
   .rp-user-popover {
     position: absolute; top: calc(100% + 10px); right: 0; min-width: 224px;
@@ -338,7 +338,7 @@
     padding: 8px 10px; border-radius: 9px; background: var(--rp-hover-tint);
     margin-bottom: 2px;
   }
-  .rp-theme-switch-label { display: none; }
+  .rp-theme-switch-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--rp-ink); }
   .rp-theme-switch {
     position: relative; width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--rp-border-strong);
     background: var(--rp-input-bg); cursor: pointer; flex-shrink: 0; padding: 0;
@@ -553,6 +553,7 @@ body:before{
 
 /* Banner foto header dashboard (opsional, diisi per cabang) */
 .rp-dash-banner{
+  position:relative;
   display:flex;
   align-items:flex-end;
   justify-content:space-between;
@@ -570,6 +571,16 @@ body:before{
   border:1px solid var(--rp-border);
 }
 .rp-dash-banner-text{ position:relative; z-index:1; }
+/* Begitu banner ada fotonya, judul & subjudul dipaksa putih + dikasih
+   text-shadow, TERLEPAS dari tema light/dark yang lagi aktif — soalnya
+   warna teks tema (--rp-ink) belum tentu kebaca di atas foto sembarang.
+   Scrim gelap di background-image (lihat bannerStyle di JS) + shadow ini
+   sama-sama jaga kontras biar subjudul tetap kebaca. */
+.rp-dash-banner.has-photo .rp-dash-banner-text h1,
+.rp-dash-banner.has-photo .rp-dash-banner-text .rp-sub{
+  color:#fff;
+  text-shadow:0 1px 3px rgba(0,0,0,.55), 0 2px 14px rgba(0,0,0,.4);
+}
 .rp-dash-banner-edit{
   position:relative;
   z-index:1;
@@ -597,6 +608,52 @@ body:before{
 }
 @media (max-width:640px){
   .rp-dash-banner.has-photo{ min-height:68px; padding:10px 12px; }
+  /* Di HP, tombol foto header JANGAN sampai bikin baris baru (makan
+     tempat) — dilepas dari alur flex (absolute, pojok kanan atas) biar
+     nyewa/numpuk di atas judul/subjudul kalau perlu. Nggak masalah kalau
+     ketiban teks: begitu ada foto, tombolnya dibikin nyaris transparan
+     (lihat .has-photo .rp-dash-banner-edit di atas) jadi gak ganggu. */
+  .rp-dash-banner-tools{
+    position:absolute;
+    top:0;
+    right:0;
+    flex-wrap:nowrap;
+  }
+  .rp-dash-banner-edit{
+    font-size:11px;
+    padding:5px 8px;
+  }
+}
+
+/* Tombol fitur halaman (Tambah unit, Ekspor, dsb) — diletakkan di baris
+   sendiri persis di bawah header, TERPISAH dari banner foto header, dan
+   dibikin lebih kecil/ringkas biar nggak keliatan segede judul halaman. */
+.rp-page-tools-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin:10px 0 20px;
+}
+.rp-page-tools-row .rp-btn{
+  width:auto;
+  font-size:12px;
+  font-weight:600;
+  padding:6px 10px;
+  border-radius:7px;
+  gap:5px;
+}
+.rp-page-tools-row .rp-btn svg{
+  width:12px;
+  height:12px;
+}
+.rp-page-tools-row .rp-search{
+  width:auto;
+  min-width:0;
+}
+.rp-page-tools-row .rp-search input{
+  font-size:12px;
+  padding:6px 8px;
 }
 
 /* KPI cards */
@@ -858,7 +915,7 @@ body:before{
   max-width:120px;
 }
 .rp-user-role{
-  font-size:9px;
+  font-size:8px;
 }
 .rp-user-popover{
   border-radius:16px;
@@ -895,24 +952,24 @@ body:before{
   }
   .rp-quick-fan-btn,
   .rp-user-dropdown .rp-user-menu-btn{
-    width:auto; height:auto; flex-direction:column; align-items:center; gap:0;
+    position:relative; width:auto; height:auto; flex-direction:row; align-items:center; gap:0;
     padding:0; margin:0; background:none; border:none; box-shadow:none;
   }
   .rp-quick-fan-btn{ color:var(--rp-ink); cursor:pointer; }
   .rp-btn-circle{
     width:46px; height:46px; border-radius:50%; flex-shrink:0;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    display:flex; align-items:center; justify-content:center;
     background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
     box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
-    position:relative; overflow:hidden;
   }
   .rp-quick-fan-btn svg,
   .rp-user-dropdown .rp-user-menu-btn svg{ width:16px; height:16px; flex-shrink:0; }
   .rp-user-dropdown .rp-btn-label{
-    display:block; font-size:6px; font-weight:700; line-height:1.05;
-    color:var(--rp-ink); text-align:center; max-width:40px;
+    position:absolute; left:50%; bottom:5px; transform:translateX(-50%);
+    display:block; font-size:6px; font-weight:600; line-height:1;
+    color:var(--rp-ink); text-align:center; max-width:38px;
     background:none; border:none; padding:0; box-shadow:none;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;
   }
   .rp-user-dropdown .rp-user-menu-danger .rp-btn-label{ color:var(--rp-red); }
   .rp-user-dropdown .rp-user-popover{
@@ -922,25 +979,26 @@ body:before{
     background:transparent; transition:none;
   }
   .rp-user-dropdown .rp-theme-switch-row{
-    width:auto; display:flex; align-items:center; justify-content:center;
+    width:auto; position:relative; display:flex; align-items:center; justify-content:center;
     background:none; border:none; box-shadow:none; padding:0; margin:0;
   }
   .rp-user-dropdown .rp-theme-switch{
     width:46px; height:46px; border-radius:50%;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    display:flex; align-items:center; justify-content:center;
     background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
     box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
-    position:relative; overflow:hidden;
   }
   .rp-user-dropdown .rp-theme-switch-thumb{
-    position:static; width:18px; height:18px; transform:none; flex-shrink:0;
+    position:static; width:18px; height:18px; transform:none;
   }
   .rp-user-dropdown .rp-theme-switch-label{
-    display:block; font-size:6px; font-weight:700; line-height:1.05;
-    color:var(--rp-ink); text-align:center; max-width:40px;
+    position:absolute; left:50%; bottom:5px; transform:translateX(-50%);
+    display:block; font-size:6px; font-weight:600; line-height:1;
+    color:var(--rp-ink); text-align:center; max-width:38px;
     background:none; border:none; padding:0; box-shadow:none;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;
   }
+  .rp-user-dropdown .rp-theme-switch-label svg{ display:none; }
   .rp-user-dropdown .rp-user-menu-danger{ color:var(--rp-red); }
 }
 
@@ -1007,7 +1065,9 @@ body:before{
 }
 @media (max-width:390px){
   .rp-unit-grid{grid-template-columns:1fr}
-  .rp-user-name{max-width:64px}
+  .rp-user-name{max-width:48px}
+  .rp-user-id{max-width:80px}
+  .rp-user-role{font-size:8px}
   .rp-user-trigger{padding:4px 8px 4px 4px;gap:6px}
 }
 
@@ -1140,6 +1200,23 @@ body:before{
   .rp-static-branch{font-family:var(--rp-sans);font-size:13.5px;color:var(--rp-ink);border:1px solid var(--rp-border);border-radius:8px;padding:8px 10px;background:var(--rp-input-bg)}
   .rp-branch-tag{font-size:11px;color:var(--rp-ink-dim);padding-bottom:10px}
 
+@media (max-width: 1024px) {
+  /* Perbaikan final: nama+role di trigger avatar disembunyiin dulu biar
+     ringkas, baru muncul (kayak semula, 2 baris) pas menu-nya dibuka. */
+  .rp-user-id { display: none; }
+  .rp-user-menu.is-open .rp-user-trigger .rp-user-id {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+    max-width: 108px; overflow: hidden;
+  }
+  .rp-user-menu.is-open .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rp-user-menu.is-open .rp-user-role { font-size: 8.5px; white-space: nowrap; }
+}
+@media (max-width: 390px) {
+  .rp-user-menu.is-open .rp-user-id { max-width: 80px; }
+  .rp-user-menu.is-open .rp-user-name { max-width: 64px; font-size: 10px; }
+  .rp-user-menu.is-open .rp-user-role { font-size: 8px; }
+}
+
 </style>
 </head>
 <body>
@@ -1147,6 +1224,7 @@ body:before{
 <div id="modal-root"></div>
 <div id="toast" class="rp-toast" style="display:none;"></div>
 <div id="user-menu" class="rp-user-menu"></div>
+<input type="file" id="header-photo-file-input" accept="image/*" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
@@ -1305,13 +1383,13 @@ function renderUserMenu() {
       ${quickFanHtml()}
       <div class="rp-user-popover">
         <div class="rp-theme-switch-row">
+          <span class="rp-theme-switch-label">${icon(t === "dark" ? "moon" : "sun", 13)} Mode ${t === "dark" ? "gelap" : "terang"}</span>
           <button type="button" class="rp-theme-switch${t === "dark" ? " is-on" : ""}" onclick="toggleTheme()" title="Ganti mode terang/gelap" aria-label="Ganti mode terang/gelap">
             <span class="rp-theme-switch-thumb">${icon(t === "dark" ? "moon" : "sun", 10)}</span>
-            <span class="rp-theme-switch-label">Mode ${t === "dark" ? "gelap" : "terang"}</span>
           </button>
         </div>
-        <button type="button" class="rp-user-menu-btn" title="Ganti foto profil" onclick="triggerAvatarPicker()"><span class="rp-btn-circle">${icon("pencil", 14)}<span class="rp-btn-label">Ganti foto profil</span></span></button>
-        <button type="button" class="rp-user-menu-btn rp-user-menu-danger" title="Keluar" onclick="logoutApp()"><span class="rp-btn-circle">${icon("x", 14)}<span class="rp-btn-label">Keluar</span></span></button>
+        <button type="button" class="rp-user-menu-btn" title="Ganti foto profil" onclick="triggerAvatarPicker()"><span class="rp-btn-circle">${icon("pencil", 14)}</span><span class="rp-btn-label">Ganti foto profil</span></button>
+        <button type="button" class="rp-user-menu-btn rp-user-menu-danger" title="Keluar" onclick="logoutApp()"><span class="rp-btn-circle">${icon("x", 14)}</span><span class="rp-btn-label">Keluar</span></button>
       </div>
     </div>
     <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarFile(event)">
@@ -1330,7 +1408,7 @@ function quickFanHtml() {
     ...(isAdmin() ? [{ icon: "wallet", label: "Pengeluaran", fn: "openExpenseModal('')" }] : []),
   ];
   const btns = items.map((it) => {
-    return `<button type="button" class="rp-quick-fan-btn" title="${esc(it.label)}" onclick="${it.fn};closeUserMenu()"><span class="rp-btn-circle">${icon(it.icon, 15)}<span class="rp-btn-label">${it.label}</span></span></button>`;
+    return `<button type="button" class="rp-quick-fan-btn" title="${esc(it.label)}" onclick="${it.fn};closeUserMenu()"><span class="rp-btn-circle">${icon(it.icon, 15)}</span><span class="rp-btn-label">${it.label}</span></button>`;
   }).join("");
   return `<div class="rp-quick-fan">${btns}</div>`;
 }
@@ -1365,6 +1443,77 @@ function handleAvatarFile(e) {
   };
   reader.onerror = () => flash("Gagal membaca file foto.");
   reader.readAsDataURL(file);
+}
+// --------------------- Foto header per halaman ---------------------
+// Sama persis kayak foto cabang di Dashboard: diupload ke Cloudinary lalu
+// URL-nya disimpen di state.settings.headerPhotos (ikut tersinkron via
+// Firestore), jadi tiap halaman (Cabang&Unit, Riwayat, Pelanggan, Stok,
+// Laporan) punya foto header sendiri-sendiri yang kebagi ke semua device/user.
+let _pendingHeaderPhotoKey = "";
+function getHeaderPhotoUrl(pageKey) {
+  const map = state.settings.headerPhotos || {};
+  return map[pageKey] || "";
+}
+function triggerHeaderPhotoPicker(pageKey) {
+  _pendingHeaderPhotoKey = pageKey;
+  const inp = document.getElementById("header-photo-file-input");
+  if (inp) inp.click();
+}
+async function handleHeaderPhotoFile(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file || !_pendingHeaderPhotoKey) return;
+  if (!file.type.startsWith("image/")) { flash("File harus berupa gambar."); return; }
+  if (file.size > 5 * 1024 * 1024) { flash("Ukuran foto maksimal 5MB."); return; }
+  const key = _pendingHeaderPhotoKey;
+  flash("Mengunggah foto header…");
+  try {
+    const url = await uploadToCloudinary(file);
+    state.settings.headerPhotos = { ...(state.settings.headerPhotos || {}), [key]: url };
+    persistSettings();
+    renderTab();
+    flash("Foto header diperbarui.");
+  } catch (err) {
+    console.error(err);
+    flash("Gagal upload foto header: " + (err && err.message ? err.message : "cek koneksi internet."));
+  }
+}
+function removeHeaderPhoto(pageKey) {
+  const map = { ...(state.settings.headerPhotos || {}) };
+  delete map[pageKey];
+  state.settings.headerPhotos = map;
+  persistSettings();
+  renderTab();
+  flash("Foto header dihapus.");
+}
+(function initHeaderPhotoInput(){
+  const inp = document.getElementById("header-photo-file-input");
+  if (inp) inp.addEventListener("change", handleHeaderPhotoFile);
+})();
+// Header banner generik — desainnya sama persis kayak banner Dashboard
+// (h1+subjudul di kiri, tombol/tools di kanan, opsional foto latar).
+// `tools` diisi tombol-tombol yang sebelumnya sudah ada di header
+// masing-masing halaman (Tambah unit, Ekspor, dsb) supaya tetap ada.
+function pageHeaderBanner(opts) {
+  const key = opts.key;
+  const photoUrl = getHeaderPhotoUrl(key);
+  const hasPhoto = !!photoUrl;
+  const bannerStyle = hasPhoto
+    ? ` style="background-image:linear-gradient(100deg, rgba(8,10,18,.74) 0%, rgba(8,10,18,.52) 45%, rgba(8,10,18,0) 88%), url('${esc(photoUrl)}')"`
+    : "";
+  const titleAttr = opts.titleOnClick ? ` onclick="${opts.titleOnClick}"` : "";
+  return `
+    <header class="rp-page-head rp-dash-banner${hasPhoto ? " has-photo" : ""}"${bannerStyle}${hasPhoto ? ` onclick="this.classList.toggle('rp-banner-edit-visible')"` : ""}>
+      <div class="rp-dash-banner-text">
+        <h1${titleAttr}>${opts.title}</h1>
+        ${opts.subtitle ? `<p class="rp-sub"${opts.subtitleId ? ` id="${opts.subtitleId}"` : ""}>${opts.subtitle}</p>` : ""}
+      </div>
+      <div class="rp-head-tools rp-dash-banner-tools">
+        <button class="rp-btn rp-btn-ghost rp-dash-banner-edit" onclick="event.stopPropagation();triggerHeaderPhotoPicker('${key}')">${icon("image", 13)} ${hasPhoto ? "Ganti foto" : "Tambah foto header"}</button>
+        ${hasPhoto ? `<button class="rp-btn rp-btn-ghost rp-dash-banner-edit" onclick="event.stopPropagation();removeHeaderPhoto('${key}')">${icon("x", 13)} Hapus foto</button>` : ""}
+      </div>
+    </header>
+    ${opts.tools ? `<div class="rp-page-tools-row">${opts.tools}</div>` : ""}`;
 }
 function setTheme(t) {
   document.documentElement.setAttribute("data-theme", t);
@@ -1479,7 +1628,10 @@ function normalize(raw) {
     branchId: e.branchId || branches[0].id, branchName: e.branchName || (branches.find(b=>b.id===(e.branchId||branches[0].id))||branches[0]).name
   }));
 
-  const settings = { businessName, defaultRate, branches, cashiers, admin };
+  let headerPhotos = (settingsRow.headerPhotos && typeof settingsRow.headerPhotos === "object") ? settingsRow.headerPhotos : {};
+  headerPhotos = Object.fromEntries(Object.entries(headerPhotos).filter(([k, v]) => k && v).map(([k, v]) => [String(k), String(v)]));
+
+  const settings = { businessName, defaultRate, branches, cashiers, admin, headerPhotos };
   return { settings, units, activeRentals, transactions, members, inventory, queue, expenses };
 }
 
@@ -1487,7 +1639,7 @@ function normalize(raw) {
    State
 ========================================================= */
 let state = {
-  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], admin: { username: "admin", password: "admin123" } },
+  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], admin: { username: "admin", password: "admin123" }, headerPhotos: {} },
   units: [], activeRentals: {}, transactions: [], members: [], inventory: [], queue: [], expenses: []
 };
 let currentTab = "dashboard";
@@ -1772,7 +1924,8 @@ function persistSettings() {
     branches: state.settings.branches,
     cashiers: state.settings.cashiers,
     adminUsername: admin.username,
-    adminPassword: admin.password
+    adminPassword: admin.password,
+    headerPhotos: state.settings.headerPhotos || {}
   };
   apiSave("Settings", [row]);
 }
@@ -2848,7 +3001,7 @@ function renderDashboard() {
   const activeBranch = getBranches().find(b => b.id === ensureSelectedBranch()) || {};
   const hasPhoto = !!activeBranch.photoUrl;
   const bannerStyle = hasPhoto
-    ? ` style="background-image:linear-gradient(100deg, var(--rp-page-bg) 0%, var(--rp-page-bg) 40%, rgba(10,10,10,0) 82%), url('${esc(activeBranch.photoUrl)}')"`
+    ? ` style="background-image:linear-gradient(100deg, rgba(8,10,18,.74) 0%, rgba(8,10,18,.52) 45%, rgba(8,10,18,0) 88%), url('${esc(activeBranch.photoUrl)}')"`
     : "";
   return `
     <div class="rp-page">
@@ -2979,11 +3132,13 @@ function renderUnits() {
       <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openBranchModal('${b.id}')" title="Ubah">${icon("pencil",15)}</button>
       <button class="rp-icon-btn rp-icon-danger" onclick="removeBranch('${b.id}')" title="Hapus">${icon("trash",15)}</button></td></tr>`).join("");
   return `<div class="rp-page">
-    <header class="rp-page-head rp-page-head-row">
-      <div><h1>${isAdmin()?"Cabang &amp; Unit":"Unit PS"}</h1><p class="rp-sub">${isAdmin()?"Kelola cabang dan unit PS. Satu cabang dapat memiliki beberapa unit.":"Kelola unit pada cabang yang sedang dipilih."}</p></div>
-      <div class="rp-head-tools">${isAdmin()?`<button class="rp-btn rp-btn-ghost" onclick="openBranchModal('')">${icon("plus",14)} Tambah cabang</button>`:""}
-      <button class="rp-btn rp-btn-start" onclick="openUnitModal('')">${icon("plus",14)} Tambah unit</button></div>
-    </header>
+    ${pageHeaderBanner({
+      key: "units",
+      title: isAdmin()?"Cabang &amp; Unit":"Unit PS",
+      subtitle: isAdmin()?"Kelola cabang dan unit PS. Satu cabang dapat memiliki beberapa unit.":"Kelola unit pada cabang yang sedang dipilih.",
+      tools: `${isAdmin()?`<button class="rp-btn rp-btn-ghost" onclick="openBranchModal('')">${icon("plus",14)} Tambah cabang</button>`:""}
+      <button class="rp-btn rp-btn-start" onclick="openUnitModal('')">${icon("plus",14)} Tambah unit</button>`
+    })}
     <div class="rp-branch-bar">${branchSwitcherLabel()}
     <span class="rp-branch-tag">${visibleUnits.length} unit di cabang ini</span></div>
     <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Unit</th><th>Cabang</th><th>Tarif/jam</th><th>Status</th><th></th></tr></thead>
@@ -3104,13 +3259,14 @@ function renderRiwayat() {
     </tr>`).join("");
   return `
     <div class="rp-page">
-      <header class="rp-page-head rp-page-head-row">
-        <div><h1>Riwayat Sewa</h1><p class="rp-sub" id="riwayat-count">${visibleTx.length} transaksi · total ${rupiah(total)}</p></div>
-        <div class="rp-head-tools">
-          <div class="rp-search">${icon("search",14)}<input id="riwayat-search" placeholder="Cari unit / nama…" /></div>
-          <button class="rp-btn rp-btn-ghost" onclick="exportRiwayatCSV()" ${!state.transactions.length?"disabled":""}>${icon("download",14)} Ekspor Excel</button>
-        </div>
-      </header>
+      ${pageHeaderBanner({
+        key: "riwayat",
+        title: "Riwayat Sewa",
+        subtitle: `${visibleTx.length} transaksi · total ${rupiah(total)}`,
+        subtitleId: "riwayat-count",
+        tools: `<div class="rp-search">${icon("search",14)}<input id="riwayat-search" placeholder="Cari unit / nama…" /></div>
+          <button class="rp-btn rp-btn-ghost" onclick="exportRiwayatCSV()" ${!state.transactions.length?"disabled":""}>${icon("download",14)} Ekspor Excel</button>`
+      })}
       <div class="rp-table-wrap"><table class="rp-table" id="riwayat-table">
         <thead><tr><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
@@ -3140,10 +3296,12 @@ function renderMember() {
     </tr>`).join("");
   return `
     <div class="rp-page">
-      <header class="rp-page-head rp-page-head-row">
-        <div><h1>Pelanggan</h1><p class="rp-sub">Simpan data pelanggan tetap untuk memantau kunjungan &amp; total belanja.</p></div>
-        <button class="rp-btn rp-btn-start" onclick="openMemberModal('')">${icon("plus",14)} Tambah pelanggan</button>
-      </header>
+      ${pageHeaderBanner({
+        key: "member",
+        title: "Pelanggan",
+        subtitle: "Simpan data pelanggan tetap untuk memantau kunjungan &amp; total belanja.",
+        tools: `<button class="rp-btn rp-btn-start" onclick="openMemberModal('')">${icon("plus",14)} Tambah pelanggan</button>`
+      })}
       <div class="rp-search rp-search-wide">${icon("search",14)}<input id="member-search" placeholder="Cari nama pelanggan…" /></div>
       <div class="rp-table-wrap"><table class="rp-table" id="member-table">
         <thead><tr><th>Nama</th><th>No. HP</th><th>Kunjungan</th><th>Total belanja</th><th>Sejak</th><th></th></tr></thead>
@@ -3169,10 +3327,12 @@ function renderStok() {
     </tr>`).join("");
   return `
     <div class="rp-page">
-      <header class="rp-page-head rp-page-head-row">
-        <div><h1>Stok &amp; Servis</h1><p class="rp-sub">Pantau kondisi stik, kabel, game, dan jadwal servis unit.</p></div>
-        <button class="rp-btn rp-btn-start" onclick="openInventoryModal('')">${icon("plus",14)} Tambah item</button>
-      </header>
+      ${pageHeaderBanner({
+        key: "stok",
+        title: "Stok &amp; Servis",
+        subtitle: "Pantau kondisi stik, kabel, game, dan jadwal servis unit.",
+        tools: `<button class="rp-btn rp-btn-start" onclick="openInventoryModal('')">${icon("plus",14)} Tambah item</button>`
+      })}
       <div class="rp-table-wrap"><table class="rp-table">
         <thead><tr><th>Foto</th><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
@@ -3387,16 +3547,14 @@ function renderLaporan() {
     window._laporanExportLabel = selected.label;
     return `
       <div class="rp-page">
-        <header class="rp-page-head rp-page-head-row">
-          <div>
-            <h1 onclick="handleResetTitleClick()">Laba-Rugi</h1>
-            <p class="rp-sub">${periodLabel} · ${esc(laporanBranchLabel())}</p>
-          </div>
-          <div class="rp-head-tools">
-            <button class="rp-btn rp-btn-ghost" onclick="closeLabaRugiProtected()">← Ringkasan</button>
-            <button class="rp-btn rp-btn-ghost" onclick="exportLabaRugiCSV()">${icon('download',14)} Ekspor Excel</button>
-          </div>
-        </header>
+        ${pageHeaderBanner({
+          key: "laporan-labarugi",
+          title: "Laba-Rugi",
+          titleOnClick: "handleResetTitleClick()",
+          subtitle: `${periodLabel} · ${esc(laporanBranchLabel())}`,
+          tools: `<button class="rp-btn rp-btn-ghost" onclick="closeLabaRugiProtected()">← Ringkasan</button>
+            <button class="rp-btn rp-btn-ghost" onclick="exportLabaRugiCSV()">${icon('download',14)} Ekspor Excel</button>`
+        })}
         <div class="rp-field-row" style="margin-bottom:18px;align-items:flex-end;">
           ${laporanBranchOptionsHtml()}
           <label class="rp-field" style="min-width:240px;">
@@ -3451,13 +3609,12 @@ function renderLaporan() {
 
   return `
     <div class="rp-page">
-      <header class="rp-page-head rp-page-head-row">
-        <div>
-          <h1>Laporan</h1>
-          <p class="rp-sub">Ringkasan pendapatan bulan terpilih · ${esc(laporanBranchLabel())}</p>
-        </div>
-        <button class="rp-btn rp-btn-ghost" onclick="openLabaRugiProtected()">Klik Untuk Update Laba-Rugi</button>
-      </header>
+      ${pageHeaderBanner({
+        key: "laporan",
+        title: "Laporan",
+        subtitle: `Ringkasan pendapatan bulan terpilih · ${esc(laporanBranchLabel())}`,
+        tools: `<button class="rp-btn rp-btn-ghost" onclick="openLabaRugiProtected()">Klik Untuk Update Laba-Rugi</button>`
+      })}
 
       <div class="rp-field-row" style="margin-bottom:18px;align-items:flex-end;">
         ${laporanBranchOptionsHtml()}
