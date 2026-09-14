@@ -1048,6 +1048,32 @@ const dataCol = db.collection("data");
 const SHEETS = ["Settings", "Units", "ActiveRentals", "Transactions", "Members", "Inventory", "Queue", "Expenses"];
 
 /* =========================================================
+   KONFIGURASI — Cloudinary (upload foto Stok & Servis)
+   Cloud name diambil dari dashboard Cloudinary kamu (ghebtxdc).
+   PENTING: upload dilakukan langsung dari browser (tanpa server),
+   jadi HARUS pakai "unsigned upload preset" — bukan API secret.
+   Kalau preset dengan nama di bawah belum ada, buat dulu di:
+   Cloudinary Console → Settings → Upload → Upload presets → Add
+   upload preset → Signing mode: "Unsigned" → kasih nama persis
+   "rental_ps_unsigned" → Save.
+========================================================= */
+const CLOUDINARY_CLOUD_NAME = "ghebtxdc";
+const CLOUDINARY_UPLOAD_PRESET = "rental_ps_unsigned";
+async function uploadToCloudinary(file) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: form });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const errJson = await res.json(); msg = (errJson.error && errJson.error.message) || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return data.secure_url;
+}
+
+/* =========================================================
    Helpers
 ========================================================= */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -1913,12 +1939,12 @@ function openDashTxModal() {
   const todayStr = nowJakarta().toDateString();
   const todayTx = getVisibleTransactions().filter(t => toJakarta(t.end).toDateString() === todayStr);
   const total = todayTx.reduce((a,t) => a+t.amount, 0);
-  const rows = todayTx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const rows = todayTx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell("Transaksi hari ini", `
     <p class="rp-sub">${todayTx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Jam</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="5">${emptyState("Belum ada transaksi hari ini.")}</td></tr>`}</tbody>
+      <thead><tr><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada transaksi hari ini.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -1980,28 +2006,33 @@ function openLaporanDetailModal(type) {
   const tx = window._laporanExportTx || [];
   const period = "bulan";
   let periodLbl = window._laporanExportLabel || getSelectedLaporanRange().label;
-  let title = "Rincian", theadRow = "", bodyRows = "";
+  const showBranchCol = getLaporanBranchId() === "ALL";
+  let title = "Rincian", theadRow = "", bodyRows = "", colCount = 5;
   if (type === "duration") {
     title = "Rincian durasi per unit";
     const byUnitMap = {};
     tx.forEach(t => {
-      if (!byUnitMap[t.unitName]) byUnitMap[t.unitName] = { minutes: 0, count: 0 };
-      byUnitMap[t.unitName].minutes += t.minutes;
-      byUnitMap[t.unitName].count += 1;
+      const branchLbl = t.branchName || getBranchName(t.branchId);
+      const key = showBranchCol ? `${branchLbl}||${t.unitName}` : t.unitName;
+      if (!byUnitMap[key]) byUnitMap[key] = { unitName: t.unitName, branchName: branchLbl, minutes: 0, count: 0 };
+      byUnitMap[key].minutes += t.minutes;
+      byUnitMap[key].count += 1;
     });
-    theadRow = "<tr><th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th></tr>";
+    colCount = showBranchCol ? 4 : 3;
+    theadRow = `<tr>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th></tr>`;
     bodyRows = Object.entries(byUnitMap).sort((a,b) => b[1].minutes - a[1].minutes)
-      .map(([name,d]) => `<tr><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
+      .map(([,d]) => `<tr>${showBranchCol?`<td>${esc(d.branchName)}</td>`:""}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
   } else {
     title = type === "revenue" ? "Rincian pendapatan" : type === "count" ? "Rincian jumlah sewa" : "Rincian rata-rata per sewa";
-    theadRow = "<tr><th>Tanggal</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr>";
-    bodyRows = tx.map(t => `<tr><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+    colCount = showBranchCol ? 6 : 5;
+    theadRow = `<tr><th>Tanggal</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr>`;
+    bodyRows = tx.map(t => `<tr><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:""}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   }
   openModal(modalShell(title, `
     <p class="rp-sub">${esc(periodLbl)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
       <thead>${theadRow}</thead>
-      <tbody>${bodyRows || `<tr><td colspan="5">${emptyState("Belum ada data pada periode ini.")}</td></tr>`}</tbody>
+      <tbody>${bodyRows || `<tr><td colspan="${colCount}">${emptyState("Belum ada data pada periode ini.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -2029,12 +2060,12 @@ function openTrendPointModal(period, startMs, index) {
   }
   const tx = state.transactions.filter(t => { const jt = toJakarta(t.end).getTime(); return jt >= rangeStart && jt <= rangeEnd; });
   const total = tx.reduce((a,t) => a+t.amount, 0);
-  const rows = tx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const rows = tx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell(`Rincian — ${label}`, `
     <p class="rp-sub">${tx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Jam</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="5">${emptyState("Tidak ada transaksi pada tanggal ini.")}</td></tr>`}</tbody>
+      <thead><tr><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6">${emptyState("Tidak ada transaksi pada tanggal ini.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -2406,7 +2437,7 @@ const CONDITIONS = ["Baik", "Perlu cek", "Rusak"];
 const CATEGORIES = ["Stik", "Game/Disk", "Kabel", "TV/Monitor", "Konsol", "Lainnya"];
 function openInventoryModal(itemId) {
   const existing = state.inventory.find(i => i.id === itemId);
-  const item = existing || { id: uid(), name: "", category: "Stik", unitId: "", condition: "Baik", note: "" };
+  const item = existing || { id: uid(), name: "", category: "Stik", unitId: "", condition: "Baik", note: "", photoUrl: "" };
   const unitOptions = state.units.map(u => `<option value="${u.id}" ${item.unitId===u.id?"selected":""}>${esc(u.name)}</option>`).join("");
   openModal(modalShell(existing ? "Ubah item" : "Tambah item", `
     <label class="rp-field"><span>Nama item</span><input id="inv-name" value="${esc(item.name)}" placeholder="Cth: Stik DualSense 2" /></label>
@@ -2414,21 +2445,59 @@ function openInventoryModal(itemId) {
     <label class="rp-field"><span>Unit terkait (opsional)</span><select id="inv-unit"><option value="">—</option>${unitOptions}</select></label>
     <label class="rp-field"><span>Kondisi</span><select id="inv-condition">${CONDITIONS.map(c=>`<option ${c===item.condition?"selected":""}>${c}</option>`).join("")}</select></label>
     <label class="rp-field"><span>Catatan (opsional)</span><input id="inv-note" value="${esc(item.note||"")}" /></label>
+    <label class="rp-field">
+      <span>Foto (opsional)</span>
+      <input type="file" id="inv-photo-file" accept="image/*" onchange="previewInventoryPhoto(event)" />
+    </label>
+    <div id="inv-photo-preview" style="margin:-4px 0 12px;">${item.photoUrl ? `<img src="${esc(item.photoUrl)}" alt="" style="width:100%;max-width:160px;border-radius:8px;display:block;" />` : ""}</div>
+    <input type="hidden" id="inv-photo-url" value="${esc(item.photoUrl||"")}" />
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
-      <button class="rp-btn rp-btn-start" onclick="submitInventory('${item.id}')">Simpan</button>
+      <button class="rp-btn rp-btn-start" id="inv-save-btn" onclick="submitInventory('${item.id}')">Simpan</button>
     </div>
   `));
 }
-function submitInventory(id) {
+// Preview lokal dulu (belum diupload) pakai FileReader, biar kasir langsung
+// lihat hasil foto sebelum klik Simpan. Upload beneran ke Cloudinary baru
+// terjadi pas submitInventory() dipanggil.
+function previewInventoryPhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { flash("Ukuran foto maksimal 5MB."); e.target.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const box = document.getElementById("inv-photo-preview");
+    if (box) box.innerHTML = `<img src="${reader.result}" alt="" style="width:100%;max-width:160px;border-radius:8px;display:block;" />`;
+  };
+  reader.onerror = () => flash("Gagal membaca file foto.");
+  reader.readAsDataURL(file);
+}
+async function submitInventory(id) {
   const name = document.getElementById("inv-name").value.trim();
   if (!name) { flash("Nama item wajib diisi."); return; }
+  const fileInput = document.getElementById("inv-photo-file");
+  const file = fileInput && fileInput.files[0];
+  let photoUrl = document.getElementById("inv-photo-url").value || "";
+  const btn = document.getElementById("inv-save-btn");
+  let photoFailed = false;
+  if (file) {
+    if (btn) { btn.disabled = true; btn.textContent = "Mengunggah foto…"; }
+    try {
+      photoUrl = await uploadToCloudinary(file);
+    } catch (err) {
+      console.error(err);
+      photoFailed = true;
+      flash("Item disimpan, tapi upload foto gagal: " + (err && err.message ? err.message : "cek koneksi internet."));
+    }
+    if (btn) { btn.disabled = false; btn.textContent = "Simpan"; }
+  }
   upsertInventory({
     id, name,
     category: document.getElementById("inv-category").value,
     unitId: document.getElementById("inv-unit").value,
     condition: document.getElementById("inv-condition").value,
     note: document.getElementById("inv-note").value,
+    photoUrl,
     lastCheck: Date.now(),
   });
 }
@@ -2709,6 +2778,7 @@ function renderRiwayat() {
   const rows = visibleTx.map(t => `
     <tr data-name="${esc((t.unitName+" "+t.customerName).toLowerCase())}">
       <td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>
+      <td>${esc(t.branchName || getBranchName(t.branchId))}</td>
       <td>${esc(t.unitName)}</td>
       <td>${esc(t.customerName)}</td>
       <td class="rp-mono">${t.minutes} mnt</td>
@@ -2725,14 +2795,14 @@ function renderRiwayat() {
         </div>
       </header>
       <div class="rp-table-wrap"><table class="rp-table" id="riwayat-table">
-        <thead><tr><th>Tanggal</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
+        <thead><tr><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
 function exportRiwayatCSV() {
   downloadXLSX("riwayat-sewa.xlsx", state.transactions.map(t => ({
-    Tanggal: fmtDateID(t.end), Jam: fmtTimeID(t.end), Unit: t.unitName, Penyewa: t.customerName,
+    Tanggal: fmtDateID(t.end), Jam: fmtTimeID(t.end), Cabang: t.branchName || getBranchName(t.branchId), Unit: t.unitName, Penyewa: t.customerName,
     "Durasi (menit)": t.minutes, "Total (Rp)": t.amount, Pembayaran: t.payment, Catatan: t.note || "",
   })), "Riwayat Sewa");
 }
@@ -2769,6 +2839,7 @@ function renderMember() {
 function renderStok() {
   const rows = state.inventory.filter(i => !i.unitId || getVisibleUnits().some(u=>u.id===i.unitId)).map(i => `
     <tr>
+      <td>${i.photoUrl ? `<img src="${esc(i.photoUrl)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;display:block;" />` : `<div style="width:36px;height:36px;border-radius:6px;background:var(--rp-input-bg);border:1px dashed var(--rp-border-strong);"></div>`}</td>
       <td>${esc(i.name)}</td>
       <td>${esc(i.category)}</td>
       <td>${esc((state.units.find(u=>u.id===i.unitId)||{}).name || "-")}</td>
@@ -2786,8 +2857,8 @@ function renderStok() {
         <button class="rp-btn rp-btn-start" onclick="openInventoryModal('')">${icon("plus",14)} Tambah item</button>
       </header>
       <div class="rp-table-wrap"><table class="rp-table">
-        <thead><tr><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
+        <thead><tr><th>Foto</th><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
