@@ -1215,17 +1215,19 @@ body:before{
   .rp-static-branch{font-family:var(--rp-sans);font-size:13.5px;color:var(--rp-ink);border:1px solid var(--rp-border);border-radius:8px;padding:8px 10px;background:var(--rp-input-bg)}
   .rp-branch-tag{font-size:11px;color:var(--rp-ink-dim);padding-bottom:10px}
 
-@media (max-width: 1024px) {
-  /* Perbaikan final: nama+role di trigger avatar disembunyiin dulu biar
-     ringkas, baru muncul (kayak semula, 2 baris) pas menu-nya dibuka. */
-  .rp-user-id { display: none; }
-  .rp-user-menu.is-open .rp-user-trigger .rp-user-id {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 0;
-    max-width: 108px; overflow: hidden;
-  }
-  .rp-user-menu.is-open .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rp-user-menu.is-open .rp-user-role { font-size: 8.5px; white-space: nowrap; }
+/* Nama+role di trigger avatar disembunyiin di SEMUA ukuran layar (HP maupun
+   laptop) biar cuma keliatan buletan avatar aja, baru muncul (2 baris) pas
+   di-hover pakai kursor (desktop) ATAU pas menu-nya dibuka (tap di HP). */
+.rp-user-id { display: none; }
+.rp-user-menu.is-open .rp-user-trigger .rp-user-id,
+.rp-user-menu:hover .rp-user-trigger .rp-user-id {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  max-width: 108px; overflow: hidden;
 }
+.rp-user-menu.is-open .rp-user-name,
+.rp-user-menu:hover .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-user-menu.is-open .rp-user-role,
+.rp-user-menu:hover .rp-user-role { font-size: 8.5px; white-space: nowrap; }
 @media (max-width: 390px) {
   .rp-user-menu.is-open .rp-user-id { max-width: 80px; }
   .rp-user-menu.is-open .rp-user-name { max-width: 64px; font-size: 10px; }
