@@ -156,6 +156,11 @@
   .rp-nav-item:hover { background: var(--rp-hover-tint); color: var(--rp-ink); }
   .rp-nav-item.is-active { background: var(--rp-chip-bg); color: var(--rp-chip-text); box-shadow: 0 6px 14px -8px var(--rp-elevation-shadow); }
   .rp-sidebar-foot { border-top: 1px solid var(--rp-border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* Rel aksi cepat sisi kiri — cuma tampil di laptop/desktop (>=1025px),
+     lihat definisi lengkapnya di media query min-width:1025px. Default-nya
+     disembunyikan biar nggak numpuk sama bottom-bar di HP/tablet. */
+  .rp-quickrail { display: none; }
   .rp-sync-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--rp-ink-dim); margin-top: 4px; }
   .rp-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rp-teal); flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
   .rp-sync-dot.is-busy { background: var(--rp-amber); }
@@ -360,9 +365,9 @@
 
   .rp-loading-screen { display: flex; align-items: center; justify-content: center; height: 100vh; width: 100%; font-family: var(--rp-serif); font-size: 16px; color: var(--rp-ink-dim); }
 
-  /* Menu bawah (bottom-bar) dipakai di HP *dan* tablet. Hanya di layar
-     laptop/desktop (>1024px) menu berubah jadi sidebar di samping. */
-  @media (max-width: 1024px) {
+  /* Menu bawah (bottom-bar) — sekarang dipakai di SEMUA ukuran layar
+     (HP, tablet, DAN laptop/desktop), bukan cuma di layar sempit lagi. */
+  @media (max-width: 99999px) {
     #root { flex-direction: column; }
     .rp-sidebar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
@@ -488,56 +493,46 @@ body:before{
 .rp-refresh-btn:hover{background:var(--rp-hover-tint);transform:translateY(-1px)}
 
 @media (min-width: 1025px) {
-  /* Menu jadi grid 2 kolom sebaris, bukan list vertikal */
-  .rp-nav{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:7px;
-  }
-  .rp-nav-item{
-    flex-direction:column;
-    justify-content:center;
-    gap:5px;
-    padding:12px 6px;
-    text-align:center;
-  }
-  .rp-nav-item.is-active:after{
-    right:auto; left:50%; bottom:5px; top:auto;
-    width:16px; height:3px; transform:translateX(-50%);
-  }
-  .rp-nav-label{ font-size:10.5px; line-height:1.15; }
+  /* Di laptop/desktop, #root balik jadi row (quickrail | main) — sidebar
+     lama udah jadi bottom-bar permanen (position:fixed, di luar alur flex
+     ini), jadi nggak kepengaruh sama flex-direction di sini. */
+  #root { flex-direction: row; }
 
-  /* Sidebar dilipat jadi rel ikon kecil (bukan hilang total) lewat tombol
-     toggle, lalu otomatis kebuka penuh begitu kursor menyorotnya. */
-  .rp-sidebar{
-    transition: width .22s ease, padding .22s ease;
+  /* Lebar dipersempit lagi. */
+  .rp-quickrail {
+    display: flex; flex-direction: column; width: 58px; flex-shrink: 0;
+    background: var(--rp-sidebar-bg); border-right: 1px solid var(--rp-border);
+    align-items: center; padding: 14px 6px; gap: 5px;
   }
-  html[data-sidebar="collapsed"] .rp-sidebar{
-    width:74px; padding-left:12px; padding-right:12px; overflow:hidden;
+  .rp-quickrail-brand {
+    width: 32px; height: 32px; border-radius: 8px; background: var(--rp-chip-bg);
+    color: var(--rp-chip-text); display: flex; align-items: center; justify-content: center;
+    font-family: var(--rp-serif); font-weight: 700; font-size: 11px; flex-shrink: 0;
+    cursor: default;
   }
-  html[data-sidebar="collapsed"] .rp-brand{ justify-content:center; padding-left:0; padding-right:0; }
-  html[data-sidebar="collapsed"] .rp-brand-text{ display:none; }
-  html[data-sidebar="collapsed"] .rp-nav{ display:flex; flex-direction:column; gap:4px; }
-  html[data-sidebar="collapsed"] .rp-nav-item{ flex-direction:row; justify-content:center; padding:11px 0; }
-  html[data-sidebar="collapsed"] .rp-nav-label{ display:none; }
-  html[data-sidebar="collapsed"] .rp-sidebar-foot{ display:none; }
+  .rp-quickrail-name {
+    font-size: 8.5px; font-weight: 600; color: var(--rp-ink-dim); text-align: center;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin-bottom: 10px; cursor: pointer;
+  }
+  .rp-quickrail-title {
+    font-size: 8px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--rp-ink-dim); text-align: center; margin-top: 6px;
+  }
+  .rp-quickrail-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    width: 100%; padding: 8px 2px; border: none; border-radius: 8px;
+    background: transparent; color: var(--rp-ink); cursor: pointer;
+    font-family: var(--rp-sans); font-size: 8.5px; font-weight: 600; text-align: center;
+    line-height: 1.1; transition: background .12s ease;
+  }
+  .rp-quickrail-btn:hover { background: var(--rp-hover-tint); }
 
-  html[data-sidebar="collapsed"] .rp-sidebar:hover{
-    width:248px; padding-left:14px; padding-right:14px; overflow:visible;
-    box-shadow:18px 0 44px -22px rgba(0,0,0,.5);
-  }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-brand{ justify-content:flex-start; padding-left:8px; padding-right:8px; }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-brand-text{ display:flex; }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-nav{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-nav-item{ flex-direction:column; justify-content:center; gap:5px; padding:12px 6px; }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-nav-label{ display:block; }
-  html[data-sidebar="collapsed"] .rp-sidebar:hover .rp-sidebar-foot{ display:flex; }
+  /* Jarak judul ke atas dipepetin. */
+  .rp-main { padding-top: 20px; padding-bottom: 64px; padding-left: 28px; padding-right: 28px; }
 }
 
 /* Main */
-.rp-main{
-  padding:34px 40px 44px;
-}
 .rp-page{
   max-width:1180px;
   margin:0 auto;
@@ -820,8 +815,8 @@ body:before{
   border-radius:16px;
 }
 
-/* Menu bawah — berlaku HP & tablet (<=1024px) */
-@media (max-width:1024px){
+/* Menu bawah — sekarang berlaku di semua ukuran layar termasuk laptop */
+@media (max-width:99999px){
   .rp-nav{ gap:0; }
   .rp-sidebar{
     width:100%;
@@ -839,9 +834,6 @@ body:before{
   }
   .rp-nav-item.is-active:after{
     display:none;
-  }
-  .rp-main{
-    padding:66px 14px calc(82px + env(safe-area-inset-bottom));
   }
 }
 /* Mobile */
@@ -1140,7 +1132,8 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
-  printer: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/>',
+  "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+  wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/><path d="M18 13h.01"/>',
 };
 function getTheme() {
   // Default di sini HARUS sama dengan default di script bootstrap paling
@@ -1690,7 +1683,15 @@ function finishRental(unitId, payment, discount, frozenMs) {
     branchId: unit.branchId || ensureSelectedBranch(),
     branchName: unit.branchName || getBranchName(unit.branchId || ensureSelectedBranch()),
     customerName: session.customerName,
-    memberId: session.memberId || "", start: session.startTime, end: session.startTime + ms,
+    // PENTING: `end` HARUS waktu beneran sekarang (Date.now()), bukan
+    // session.startTime + ms. Untuk sewa paket durasi tetap (isFixed), `ms`
+    // yang dikirim ke sini adalah DURASI PENUH PAKET (buat ngunci harganya,
+    // itu sengaja) — bukan durasi aktual yang udah lewat. Kalau paket itu
+    // diselesaikan lebih cepat dari jadwalnya, session.startTime + ms bakal
+    // jatuh ke MASA DEPAN (tanggal paket seharusnya kelar), padahal
+    // transaksinya beneran dicatat & dibayar hari ini. Ini yang bikin
+    // transaksi "nyasar" ke tanggal yang salah di laporan/dashboard.
+    memberId: session.memberId || "", start: session.startTime, end: Date.now(),
     minutes, amount, payment, note: session.note,
   };
   state.transactions.unshift(trx);
@@ -2187,11 +2188,32 @@ async function executeDataReset() {
   }
 }
 
-function openStartModal(unitId) {
+// Dipakai tombol "Mulai sewa" di rel aksi cepat (sisi kiri, laptop/desktop):
+// buka form mulai sewa, TAPI dikasih dropdown pilih unit (bukan langsung
+// otomatis ke unit kosong pertama) — jadi kasir/admin tetep bisa milih unit
+// mana yang mau dipakein, defaultnya unit kosong pertama biar tetep cepat
+// kalau memang mau langsung pakai itu.
+function quickStartRental() {
+  const unit = getVisibleUnits().find(u => u.status === "available");
+  if (!unit) { flash("Semua unit di cabang ini lagi penuh/tidak tersedia."); return; }
+  openStartModal(unit.id, true);
+}
+function switchStartUnit(newUnitId) {
+  if (!newUnitId) return;
+  openStartModal(newUnitId, true);
+}
+function openStartModal(unitId, withUnitPicker) {
   const unit = state.units.find(u => u.id === unitId);
   if (!unit) return;
   const memberOptions = state.members.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join("");
+  const unitPickerHtml = withUnitPicker ? `
+    <label class="rp-field"><span>Unit</span>
+      <select id="start-unit" onchange="switchStartUnit(this.value)">
+        ${getVisibleUnits().filter(u => u.status === "available").map(u => `<option value="${u.id}" ${u.id===unitId?"selected":""}>${esc(u.name)} — ${rupiah(u.rate)}/jam</option>`).join("")}
+      </select>
+    </label>` : "";
   openModal(modalShell(`Mulai sewa — ${esc(unit.name)}`, `
+    ${unitPickerHtml}
     <div class="rp-field-row">
       <button id="mode-guest" class="rp-pill is-on" onclick="setStartMode('guest')">Tamu baru</button>
       <button id="mode-member" class="rp-pill" onclick="setStartMode('member')">Pelanggan terdaftar</button>
@@ -2552,6 +2574,24 @@ function renderSyncDot() {
   label.textContent = text;
 }
 
+function openBrandRenameModal() {
+  openModal(modalShell("Ganti nama usaha", `
+    <label class="rp-field"><span>Nama usaha</span><input id="brand-rename-input" value="${esc(state.settings.businessName)}" autocomplete="off"></label>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
+      <button class="rp-btn rp-btn-start" onclick="submitBrandRename()">Simpan</button>
+    </div>
+  `));
+}
+function submitBrandRename() {
+  const v = (document.getElementById("brand-rename-input").value || "").trim();
+  if (!v) { flash("Nama usaha wajib diisi."); return; }
+  saveBusinessName(v);
+  closeModal();
+  renderAll();
+  flash("Nama usaha diperbarui.");
+}
+
 function renderAll() {
   if (!ready) return;
   if (typeof hideTrendHover === "function") hideTrendHover();
@@ -2559,14 +2599,16 @@ function renderAll() {
   firstRenderDone = true;
 
   document.getElementById("root").innerHTML = `
+    <aside class="rp-quickrail${enter}">
+      <div class="rp-quickrail-brand" title="${esc(state.settings.businessName)} — klik buat ganti nama" onclick="openBrandRenameModal()">${esc(getInitials(state.settings.businessName))}</div>
+      <div class="rp-quickrail-name" title="${esc(state.settings.businessName)} — klik buat ganti nama" onclick="openBrandRenameModal()">${esc(state.settings.businessName)}</div>
+      <button class="rp-quickrail-btn" onclick="quickStartRental()">${icon("play",18)}<span>Mulai sewa</span></button>
+      <button class="rp-quickrail-btn" onclick="openQueueModal()">${icon("users",18)}<span>Antrian</span></button>
+      <button class="rp-quickrail-btn" onclick="openMemberModal('')">${icon("user-plus",18)}<span>Pelanggan</span></button>
+      ${isAdmin() ? `<button class="rp-quickrail-btn" onclick="openExpenseModal('')">${icon("wallet",18)}<span>Pengeluaran</span></button>` : ""}
+      <div class="rp-quickrail-title">Aksi cepat</div>
+    </aside>
     <aside class="rp-sidebar${enter}">
-      <div class="rp-brand">
-        <div class="rp-brand-mark">PS</div>
-        <div class="rp-brand-text">
-          <input id="brand-input" class="rp-brand-input" value="${esc(state.settings.businessName)}" />
-          <span class="rp-brand-sub">Sistem Kasir Digital</span>
-        </div>
-      </div>
       <nav class="rp-nav">
         ${NAV.filter(n=>!n.adminOnly||isAdmin()).map(n => `<button class="rp-nav-item${currentTab===n.id?" is-active":""}" onclick="setTab('${n.id}')">${icon(n.icon,18)}<span class="rp-nav-label">${esc(isAdmin()&&n.adminLabel?n.adminLabel:n.label)}</span></button>`).join("")}
       </nav>
@@ -2578,7 +2620,6 @@ function renderAll() {
     </aside>
     <main class="rp-main${enter}">${renderTab()}</main>
   `;
-  document.getElementById("brand-input").addEventListener("input", (e) => { saveBusinessName(e.target.value); });
   renderSyncDot();
   renderUserMenu();
   wireTabExtras();
