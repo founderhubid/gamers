@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Rental PS - Kasir Digital</title>
+<title>Rental PS — Kasir Digital</title>
 <script>
   // Set tema sedini mungkin biar tidak "kedip" warna salah saat halaman dibuka.
   (function () {
@@ -1321,6 +1321,7 @@ function normalize(raw) {
   const queue = (raw.Queue || []).map(q => ({
     id: q.id, customerName: q.customerName || "Tamu", phone: q.phone || "",
     unitId: q.unitId || null, note: q.note || "", requestedAt: Number(q.requestedAt) || Date.now(),
+    branchId: q.branchId || null,
   }));
 
   const expenses = (raw.Expenses || []).map(e => ({
@@ -1608,7 +1609,24 @@ function persistActive() {
 function persistTransactions() { apiSave("Transactions", state.transactions); }
 function persistMembers() { apiSave("Members", state.members); }
 function persistInventory() { apiSave("Inventory", state.inventory); }
-function persistSettings() { apiSave("Settings", [state.settings]); }
+// PENTING: normalize() (dipakai pas load) baca kredensial admin dari field
+// RATA `adminUsername` / `adminPassword` di dalam rows[0] — BUKAN dari
+// object nested `admin: {username,password}`. Kalau di-save apa adanya dari
+// state.settings (yang nyimpen admin sebagai object nested untuk kemudahan
+// dipakai di kode lain), field itu nggak bakal kebaca lagi pas reload.
+// Makanya di sini kita ratain dulu sebelum dikirim ke Firestore.
+function persistSettings() {
+  const admin = getAdminAccount();
+  const row = {
+    businessName: state.settings.businessName,
+    defaultRate: state.settings.defaultRate,
+    branches: state.settings.branches,
+    cashiers: state.settings.cashiers,
+    adminUsername: admin.username,
+    adminPassword: admin.password
+  };
+  apiSave("Settings", [row]);
+}
 function persistQueue() { apiSave("Queue", state.queue); }
 function persistExpenses() { apiSave("Expenses", state.expenses); }
 
@@ -1852,9 +1870,12 @@ function saveBusinessName(v) { state.settings.businessName = v; persistSettings(
 
 /* =========================================================
    Antrian sewa
+   PENTING: antrian sekarang per cabang (branchId), bukan global lagi —
+   diisi otomatis dari cabang yang lagi aktif pas antrian dibuat.
 ========================================================= */
+function getVisibleQueue(){ const bid=ensureSelectedBranch(); return state.queue.filter(q=>(q.branchId||getBranches()[0].id)===bid); }
 function addToQueue(customerName, phone, unitId, note) {
-  state.queue.push({ id: uid(), customerName: customerName || "Tamu", phone: phone || "", unitId: unitId || null, note: note || "", requestedAt: Date.now() });
+  state.queue.push({ id: uid(), customerName: customerName || "Tamu", phone: phone || "", unitId: unitId || null, note: note || "", requestedAt: Date.now(), branchId: ensureSelectedBranch() });
   persistQueue();
   renderAll();
   openQueueModal();
@@ -1893,16 +1914,20 @@ function assignQueueEntry(queueId) {
   if (q.note) { const noteInput = document.getElementById("start-note"); if (noteInput) noteInput.value = q.note; }
 }
 function maybeNotifyQueueForUnit(unitId, unitName) {
-  const waiting = state.queue.filter(q => q.unitId === unitId || !q.unitId);
+  const unit = state.units.find(u => u.id === unitId);
+  const branchId = unit ? (unit.branchId || getBranches()[0].id) : null;
+  const waiting = state.queue.filter(q => (q.branchId||getBranches()[0].id) === branchId && (q.unitId === unitId || !q.unitId));
   if (!waiting.length) return;
   setTimeout(() => {
     flash(`${waiting[0].customerName} sedang mengantre — ${unitName} baru saja kosong.`);
   }, 700);
 }
 function openQueueModal(prefUnitId) {
-  const unitOptions = `<option value="">Unit apapun (fleksibel)</option>` + state.units.map(u => `<option value="${u.id}" ${prefUnitId===u.id?"selected":""}>${esc(u.name)}</option>`).join("");
-  const availableUnits = state.units.filter(u => u.status === "available");
-  const rows = state.queue.map(q => {
+  const visibleUnits = getVisibleUnits();
+  const unitOptions = `<option value="">Unit apapun (fleksibel)</option>` + visibleUnits.map(u => `<option value="${u.id}" ${prefUnitId===u.id?"selected":""}>${esc(u.name)}</option>`).join("");
+  const availableUnits = visibleUnits.filter(u => u.status === "available");
+  const branchQueue = getVisibleQueue();
+  const rows = branchQueue.map(q => {
     const unitName = q.unitId ? ((state.units.find(u => u.id === q.unitId) || {}).name || "-") : "Unit apapun";
     const assignOptions = availableUnits.map(u => `<option value="${u.id}" ${u.id===q.unitId?"selected":""}>${esc(u.name)}</option>`).join("");
     return `<tr>
@@ -1924,7 +1949,7 @@ function openQueueModal(prefUnitId) {
     <label class="rp-field"><span>Unit yang diinginkan</span><select id="queue-unit">${unitOptions}</select></label>
     <label class="rp-field"><span>Catatan (opsional)</span><input id="queue-note" placeholder="Cth: bawa 2 stik" /></label>
     <button class="rp-btn rp-btn-start" onclick="submitQueue()">${icon("plus",14)} Tambahkan ke antrian</button>
-    <div class="rp-ruled-head">Daftar antrian (${state.queue.length})</div>
+    <div class="rp-ruled-head">Daftar antrian (${branchQueue.length})</div>
     <div class="rp-table-wrap"><table class="rp-table">
       <thead><tr><th>Nama</th><th>HP</th><th>Unit diminta</th><th>Waktu</th><th></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="5">${emptyState("Belum ada antrian.")}</td></tr>`}</tbody>
@@ -1949,7 +1974,7 @@ function openDashTxModal() {
   `));
 }
 function openDashActiveUnitsModal() {
-  const rows = state.units.filter(u => u.status === "active" && state.activeRentals[u.id]).map(u => {
+  const rows = getVisibleUnits().filter(u => u.status === "active" && state.activeRentals[u.id]).map(u => {
     const s = state.activeRentals[u.id];
     const elapsed = Date.now() - s.startTime;
     return `<tr><td>${esc(u.name)}</td><td>${esc(s.customerName)}</td><td class="rp-mono">${fmtHMS(elapsed)}</td><td>${esc(s.note || "-")}</td></tr>`;
@@ -2572,7 +2597,10 @@ function renderTab() {
 /* --------------------- Dashboard --------------------- */
 function renderDashboard() {
   const todayStr = nowJakarta().toDateString();
-  const todayTx = state.transactions.filter(t => toJakarta(t.end).toDateString() === todayStr);
+  // PENTING: harus difilter ke cabang aktif (getVisibleTransactions), bukan
+  // state.transactions mentah — kalau nggak, pendapatan/transaksi hari ini
+  // di dashboard kasir ikut kecampur sama transaksi cabang lain.
+  const todayTx = getVisibleTransactions().filter(t => toJakarta(t.end).toDateString() === todayStr);
   const todayRevenue = todayTx.reduce((a,t) => a + t.amount, 0);
   const activeCount = getVisibleUnits().filter(u => !!state.activeRentals[u.id]).length;
 
@@ -2628,7 +2656,7 @@ function renderDashboard() {
         <div class="rp-stat-card rp-clickable" onclick="openDashTxModal()"><span class="rp-stat-label">Pendapatan hari ini</span><strong class="rp-mono rp-stat-value">${rupiah(todayRevenue)}</strong></div>
         <div class="rp-stat-card rp-clickable" onclick="openDashTxModal()"><span class="rp-stat-label">Transaksi hari ini</span><strong class="rp-mono rp-stat-value">${todayTx.length}</strong></div>
         <div class="rp-stat-card rp-clickable" onclick="openDashActiveUnitsModal()"><span class="rp-stat-label">Unit sedang disewa</span><strong class="rp-mono rp-stat-value">${activeCount} / ${getVisibleUnits().length}</strong></div>
-        <div class="rp-stat-card rp-clickable" onclick="openQueueModal()"><span class="rp-stat-label">Antrian menunggu</span><strong class="rp-mono rp-stat-value">${state.queue.length}</strong></div>
+        <div class="rp-stat-card rp-clickable" onclick="openQueueModal()"><span class="rp-stat-label">Antrian menunggu</span><strong class="rp-mono rp-stat-value">${getVisibleQueue().length}</strong></div>
       </div>
       <div class="rp-ruled-head">Status unit</div>
       ${state.units.length === 0 ? emptyState(`Belum ada unit PS. Tambahkan dulu di menu ${isAdmin() ? "Cabang & Unit" : "Unit PS"}.`) : `<div class="rp-unit-grid">${cards}</div>`}
@@ -2714,7 +2742,48 @@ function renderUnits() {
     <tbody>${rows||`<tr><td colspan="5">${emptyState("Belum ada unit pada cabang ini.")}</td></tr>`}</tbody></table></div>
     ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>`:""}
     ${isAdmin()?renderCashierSection():""}
+    ${isAdmin()?renderAdminSection():""}
   </div>`;
+}
+/* --------------------- Akun admin --------------------- */
+function renderAdminSection(){
+  const admin = getAdminAccount();
+  return `
+    <div class="rp-ruled-head">Akun admin</div>
+    <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Username &amp; password untuk login sebagai Administrator (akses penuh, semua cabang).</p>
+    <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Username</th><th>Password</th><th></th></tr></thead>
+      <tbody><tr><td>${esc(admin.username)}</td><td class="rp-mono">${esc(admin.password)}</td>
+        <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openAdminModal()" title="Ubah">${icon("pencil",15)}</button></td>
+      </tr></tbody></table></div>
+  `;
+}
+function openAdminModal(){
+  const admin = getAdminAccount();
+  openModal(modalShell("Ubah akun admin", `
+    <label class="rp-field"><span>Password saat ini</span><input id="admin-current-password" type="password" placeholder="Wajib diisi untuk konfirmasi" autocomplete="off"></label>
+    <label class="rp-field"><span>Username baru</span><input id="admin-username" value="${esc(admin.username)}" autocomplete="off"></label>
+    <label class="rp-field"><span>Password baru</span><input id="admin-password" placeholder="Minimal 4 karakter" autocomplete="off"></label>
+    <p class="rp-sub" style="margin-top:-4px;">Setelah disimpan, kamu akan otomatis logout dan perlu login ulang pakai username/password baru.</p>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
+      <button class="rp-btn rp-btn-start" onclick="submitAdminAccount()">Simpan</button>
+    </div>
+  `));
+}
+function submitAdminAccount(){
+  const admin = getAdminAccount();
+  const currentPassword = document.getElementById("admin-current-password").value||"";
+  const username = (document.getElementById("admin-username").value||"").trim().toLowerCase();
+  const password = (document.getElementById("admin-password").value||"").trim();
+  if(currentPassword!==admin.password){flash("Password saat ini salah.");return;}
+  if(!username){flash("Username wajib diisi.");return;}
+  if(!password||password.length<4){flash("Password baru minimal 4 karakter.");return;}
+  if(getCashiers().some(c=>c.username===username)){flash("Username ini sudah dipakai akun kasir.");return;}
+  state.settings.admin={username,password};
+  persistSettings();
+  closeModal();
+  flash("Akun admin diperbarui. Silakan login ulang.");
+  logoutApp();
 }
 /* --------------------- Akun kasir per cabang --------------------- */
 function renderCashierSection(){
@@ -2753,7 +2822,7 @@ function submitCashier(id){
   const password=(document.getElementById("cashier-password").value||"").trim();
   const branchId=document.getElementById("cashier-branch").value;
   if(!username){flash("Username wajib diisi.");return;}
-  if(username==="admin"){flash("Username 'admin' sudah dipakai sistem.");return;}
+  if(username===getAdminAccount().username){flash("Username ini sudah dipakai akun admin.");return;}
   if(!password||password.length<4){flash("Password minimal 4 karakter.");return;}
   if(!branchId){flash("Cabang wajib dipilih.");return;}
   const dup=getCashiers().find(c=>c.id!==id && c.username===username);
