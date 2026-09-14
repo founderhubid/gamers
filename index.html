@@ -338,7 +338,7 @@
     padding: 8px 10px; border-radius: 9px; background: var(--rp-hover-tint);
     margin-bottom: 2px;
   }
-  .rp-theme-switch-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--rp-ink); }
+  .rp-theme-switch-label { display: none; }
   .rp-theme-switch {
     position: relative; width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--rp-border-strong);
     background: var(--rp-input-bg); cursor: pointer; flex-shrink: 0; padding: 0;
@@ -383,7 +383,7 @@
     }
     .rp-nav-label { font-size: 10px; line-height: 1.1; white-space: nowrap; }
     .rp-sidebar-foot { display: none; }
-    .rp-main { height: auto; padding-top: 64px; padding-bottom: calc(76px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
+    .rp-main { height: auto; padding-top: calc(18px + env(safe-area-inset-top)); padding-bottom: calc(76px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
     .rp-user-menu { top: 10px; right: 10px; }
     .rp-user-trigger { padding: 4px 10px 4px 4px; gap: 7px; }
     .rp-user-avatar { width: 27px; height: 27px; font-size: 11px; }
@@ -503,6 +503,7 @@ body:before{
     display: flex; flex-direction: column; width: 58px; flex-shrink: 0;
     background: var(--rp-sidebar-bg); border-right: 1px solid var(--rp-border);
     align-items: center; padding: 14px 6px; gap: 5px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
   }
   .rp-quickrail-brand {
     width: 32px; height: 32px; border-radius: 8px; background: var(--rp-chip-bg);
@@ -529,7 +530,7 @@ body:before{
   .rp-quickrail-btn:hover { background: var(--rp-hover-tint); }
 
   /* Jarak judul ke atas dipepetin. */
-  .rp-main { padding-top: 20px; padding-bottom: 64px; padding-left: 28px; padding-right: 28px; }
+  .rp-main { padding-top: 20px; padding-bottom: 64px; padding-left: 28px; padding-right: 28px; height: 100vh; overflow-y: auto; }
 }
 
 /* Main */
@@ -548,6 +549,54 @@ body:before{
 .rp-sub{
   font-size:12.5px;
   line-height:1.55;
+}
+
+/* Banner foto header dashboard (opsional, diisi per cabang) */
+.rp-dash-banner{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.rp-dash-banner.has-photo{
+  position:relative;
+  border-radius:16px;
+  overflow:hidden;
+  min-height:84px;
+  padding:12px 16px;
+  background-size:cover;
+  background-position:center;
+  border:1px solid var(--rp-border);
+}
+.rp-dash-banner-text{ position:relative; z-index:1; }
+.rp-dash-banner-edit{
+  position:relative;
+  z-index:1;
+  width:auto;
+  white-space:nowrap;
+  backdrop-filter:blur(2px);
+}
+.rp-dash-banner:not(.has-photo) .rp-dash-banner-edit{
+  background:transparent;
+  border-style:dashed;
+}
+/* Kalau bannernya udah ada fotonya, tombol "Ganti foto" dibikin nyaris
+   nggak kelihatan (superduper transparan) biar nggak nutupin foto —
+   baru muncul lagi pas kursor di-hover di atas banner, atau (buat HP,
+   yang nggak ada hover) pas bannernya di-tap sekali. */
+.rp-dash-banner.has-photo{ cursor:pointer; }
+.rp-dash-banner.has-photo .rp-dash-banner-edit{
+  opacity:.04;
+  transition:opacity .2s ease;
+}
+.rp-dash-banner.has-photo:hover .rp-dash-banner-edit,
+.rp-dash-banner.has-photo:focus-within .rp-dash-banner-edit,
+.rp-dash-banner.has-photo.rp-banner-edit-visible .rp-dash-banner-edit{
+  opacity:1;
+}
+@media (max-width:640px){
+  .rp-dash-banner.has-photo{ min-height:68px; padding:10px 12px; }
 }
 
 /* KPI cards */
@@ -813,6 +862,86 @@ body:before{
 }
 .rp-user-popover{
   border-radius:16px;
+}
+
+/* "Akses cepat" versi HP — sekarang jadi tombol-tombol BULAT mengambang
+   (kayak AssistiveTouch di iPhone), turun satu jalur ke bawah avatar,
+   gabung sama menu akun (mode gelap/ganti foto/keluar) biar nggak
+   tabrakan kayak dulu. Wrapper .rp-user-dropdown sengaja "transparan"
+   (display:contents) di desktop, jadi popover akun tetap jalan seperti
+   semula (hover, kotak list biasa); baru di HP/tablet dia dijadikan
+   rentetan bubble bulat lewat media query di bawah. */
+.rp-user-dropdown{ display:contents; }
+@media (min-width:1025px){
+  /* Desktop udah ada quickrail sendiri di kiri, jadi akses cepat nggak
+     perlu numpang di avatar lagi. */
+  .rp-quick-fan{ display:none; }
+}
+@media (max-width:1024px){
+  .rp-user-dropdown{
+    display:flex; flex-direction:column; align-items:center; gap:11px;
+    position:absolute; top:calc(100% + 14px); right:2px; min-width:0;
+    background:none; border:none; box-shadow:none; padding:0;
+    opacity:0; visibility:hidden; transform:translateY(-10px) scale(.92);
+    transform-origin:top right;
+    transition:opacity .16s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility .16s;
+    pointer-events:none;
+  }
+  .rp-user-menu.is-open .rp-user-dropdown{
+    opacity:1; visibility:visible; transform:translateY(0) scale(1); pointer-events:auto;
+  }
+  .rp-quick-fan{
+    display:flex; flex-direction:column; align-items:center; gap:11px;
+  }
+  .rp-quick-fan-btn,
+  .rp-user-dropdown .rp-user-menu-btn{
+    width:auto; height:auto; flex-direction:column; align-items:center; gap:0;
+    padding:0; margin:0; background:none; border:none; box-shadow:none;
+  }
+  .rp-quick-fan-btn{ color:var(--rp-ink); cursor:pointer; }
+  .rp-btn-circle{
+    width:46px; height:46px; border-radius:50%; flex-shrink:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
+    box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
+    position:relative; overflow:hidden;
+  }
+  .rp-quick-fan-btn svg,
+  .rp-user-dropdown .rp-user-menu-btn svg{ width:16px; height:16px; flex-shrink:0; }
+  .rp-user-dropdown .rp-btn-label{
+    display:block; font-size:6px; font-weight:700; line-height:1.05;
+    color:var(--rp-ink); text-align:center; max-width:40px;
+    background:none; border:none; padding:0; box-shadow:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .rp-user-dropdown .rp-user-menu-danger .rp-btn-label{ color:var(--rp-red); }
+  .rp-user-dropdown .rp-user-popover{
+    display:flex; flex-direction:column; align-items:center; gap:11px;
+    position:static; opacity:1; visibility:visible; transform:none;
+    border:none; box-shadow:none; padding:0; border-radius:0; min-width:0;
+    background:transparent; transition:none;
+  }
+  .rp-user-dropdown .rp-theme-switch-row{
+    width:auto; display:flex; align-items:center; justify-content:center;
+    background:none; border:none; box-shadow:none; padding:0; margin:0;
+  }
+  .rp-user-dropdown .rp-theme-switch{
+    width:46px; height:46px; border-radius:50%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
+    box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
+    position:relative; overflow:hidden;
+  }
+  .rp-user-dropdown .rp-theme-switch-thumb{
+    position:static; width:18px; height:18px; transform:none; flex-shrink:0;
+  }
+  .rp-user-dropdown .rp-theme-switch-label{
+    display:block; font-size:6px; font-weight:700; line-height:1.05;
+    color:var(--rp-ink); text-align:center; max-width:40px;
+    background:none; border:none; padding:0; box-shadow:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .rp-user-dropdown .rp-user-menu-danger{ color:var(--rp-red); }
 }
 
 /* Menu bawah — sekarang berlaku di semua ukuran layar termasuk laptop */
@@ -1134,6 +1263,7 @@ const ICONS = {
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
   wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/><path d="M18 13h.01"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
 };
 function getTheme() {
   // Default di sini HARUS sama dengan default di script bootstrap paling
@@ -1171,18 +1301,42 @@ function renderUserMenu() {
         <span class="rp-user-role">${currentUser.role === "admin" ? "Admin" : "Kasir"}</span>
       </span>
     </button>
-    <div class="rp-user-popover">
-      <div class="rp-theme-switch-row">
-        <span class="rp-theme-switch-label">${icon(t === "dark" ? "moon" : "sun", 13)} Mode ${t === "dark" ? "gelap" : "terang"}</span>
-        <button type="button" class="rp-theme-switch${t === "dark" ? " is-on" : ""}" onclick="toggleTheme()" title="Ganti mode terang/gelap" aria-label="Ganti mode terang/gelap">
-          <span class="rp-theme-switch-thumb">${icon(t === "dark" ? "moon" : "sun", 10)}</span>
-        </button>
+    <div class="rp-user-dropdown">
+      ${quickFanHtml()}
+      <div class="rp-user-popover">
+        <div class="rp-theme-switch-row">
+          <button type="button" class="rp-theme-switch${t === "dark" ? " is-on" : ""}" onclick="toggleTheme()" title="Ganti mode terang/gelap" aria-label="Ganti mode terang/gelap">
+            <span class="rp-theme-switch-thumb">${icon(t === "dark" ? "moon" : "sun", 10)}</span>
+            <span class="rp-theme-switch-label">Mode ${t === "dark" ? "gelap" : "terang"}</span>
+          </button>
+        </div>
+        <button type="button" class="rp-user-menu-btn" title="Ganti foto profil" onclick="triggerAvatarPicker()"><span class="rp-btn-circle">${icon("pencil", 14)}<span class="rp-btn-label">Ganti foto profil</span></span></button>
+        <button type="button" class="rp-user-menu-btn rp-user-menu-danger" title="Keluar" onclick="logoutApp()"><span class="rp-btn-circle">${icon("x", 14)}<span class="rp-btn-label">Keluar</span></span></button>
       </div>
-      <button type="button" class="rp-user-menu-btn" onclick="triggerAvatarPicker()">${icon("pencil", 14)} Ganti foto profil</button>
-      <button type="button" class="rp-user-menu-btn rp-user-menu-danger" onclick="logoutApp()">${icon("x", 14)} Keluar</button>
     </div>
     <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarFile(event)">
   `;
+}
+// "Akses cepat" di HP/tablet: tombol-tombol yang tadinya cuma ada di
+// quickrail desktop. Dulu dibikin muncul melengkung (fan) dari avatar
+// pas di-tap — sekarang cukup jadi baris-baris biasa di bagian atas rel
+// dropdown avatar (nyambung sama menu akun di bawahnya), soalnya posisi
+// & animasinya udah diatur lewat CSS (.rp-user-dropdown / .rp-quick-fan).
+function quickFanHtml() {
+  const items = [
+    { icon: "play", label: "Mulai sewa", fn: "quickStartRental()" },
+    { icon: "users", label: "Antrian", fn: "openQueueModal()" },
+    { icon: "user-plus", label: "Pelanggan", fn: "openMemberModal('')" },
+    ...(isAdmin() ? [{ icon: "wallet", label: "Pengeluaran", fn: "openExpenseModal('')" }] : []),
+  ];
+  const btns = items.map((it) => {
+    return `<button type="button" class="rp-quick-fan-btn" title="${esc(it.label)}" onclick="${it.fn};closeUserMenu()"><span class="rp-btn-circle">${icon(it.icon, 15)}<span class="rp-btn-label">${it.label}</span></span></button>`;
+  }).join("");
+  return `<div class="rp-quick-fan">${btns}</div>`;
+}
+function closeUserMenu() {
+  const el = document.getElementById("user-menu");
+  if (el) el.classList.remove("is-open");
 }
 function toggleUserMenu(e) {
   if (e) e.stopPropagation();
@@ -1268,7 +1422,7 @@ function normalize(raw) {
   if (!defaultRate || isNaN(defaultRate)) defaultRate = 5000;
 
   let branches = Array.isArray(settingsRow.branches) ? settingsRow.branches : [];
-  branches = branches.filter(b => b && b.id && b.name).map(b => ({ id: String(b.id), name: String(b.name) }));
+  branches = branches.filter(b => b && b.id && b.name).map(b => ({ id: String(b.id), name: String(b.name), photoUrl: b.photoUrl ? String(b.photoUrl) : "" }));
   if (!branches.length) branches = [{ id: "branch-main", name: "Cabang Utama" }];
 
   let cashiers = Array.isArray(settingsRow.cashiers) ? settingsRow.cashiers : [];
@@ -2691,9 +2845,20 @@ function renderDashboard() {
       </div>`;
   }).join("");
 
+  const activeBranch = getBranches().find(b => b.id === ensureSelectedBranch()) || {};
+  const hasPhoto = !!activeBranch.photoUrl;
+  const bannerStyle = hasPhoto
+    ? ` style="background-image:linear-gradient(100deg, var(--rp-page-bg) 0%, var(--rp-page-bg) 40%, rgba(10,10,10,0) 82%), url('${esc(activeBranch.photoUrl)}')"`
+    : "";
   return `
     <div class="rp-page">
-      <header class="rp-page-head"><h1>Dashboard Kasir</h1><p class="rp-sub">Ringkasan hari ini, ${fmtDateID(new Date())}</p></header>
+      <header class="rp-page-head rp-dash-banner${hasPhoto ? " has-photo" : ""}"${bannerStyle}${hasPhoto ? ` onclick="this.classList.toggle('rp-banner-edit-visible')"` : ""}>
+        <div class="rp-dash-banner-text">
+          <h1>Dashboard Kasir</h1>
+          <p class="rp-sub">Ringkasan hari ini, ${fmtDateID(new Date())}</p>
+        </div>
+        ${isAdmin() ? `<button class="rp-btn rp-btn-ghost rp-dash-banner-edit" onclick="event.stopPropagation();openBranchModal('${esc(activeBranch.id || "")}')">${icon("image", 13)} ${hasPhoto ? "Ganti foto" : "Tambah foto header"}</button>` : ""}
+      </header>
       ${branchSwitcherHtml()}
       <div class="rp-stat-row">
         <div class="rp-stat-card rp-clickable" onclick="openDashTxModal()"><span class="rp-stat-label">Pendapatan hari ini</span><strong class="rp-mono rp-stat-value">${rupiah(todayRevenue)}</strong></div>
@@ -2746,16 +2911,56 @@ function removeBranch(id){
   state.settings.branches=bs; ensureSelectedBranch(); renderAll(); persistSettings();
 }
 function openBranchModal(branchId){
-  const existing=getBranches().find(b=>b.id===branchId); const b=existing||{id:uid(),name:""};
+  const existing=getBranches().find(b=>b.id===branchId); const b=existing||{id:uid(),name:"",photoUrl:""};
   openModal(modalShell(existing?"Ubah cabang":"Tambah cabang",`
     <label class="rp-field"><span>Nama cabang</span><input id="branch-name" value="${esc(b.name)}" placeholder="Cth: Cirebon 1"></label>
+    <label class="rp-field">
+      <span>Foto header dashboard (opsional)</span>
+      <input type="file" id="branch-photo-file" accept="image/*" onchange="previewBranchPhoto(event)" />
+    </label>
+    <div id="branch-photo-preview" style="margin:-4px 0 10px;">${b.photoUrl?`<img src="${esc(b.photoUrl)}" alt="" style="width:100%;max-width:220px;border-radius:8px;display:block;" />`:""}</div>
+    <input type="hidden" id="branch-photo-url" value="${esc(b.photoUrl||"")}" />
+    ${b.photoUrl?`<button type="button" class="rp-btn rp-btn-ghost" style="width:auto;margin:-4px 0 12px;" onclick="clearBranchPhoto()">${icon("x",13)} Hapus foto</button>`:""}
     <div class="rp-modal-foot"><button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
-    <button class="rp-btn rp-btn-start" onclick="submitBranch('${b.id}')">Simpan</button></div>`));
+    <button class="rp-btn rp-btn-start" id="branch-save-btn" onclick="submitBranch('${b.id}')">Simpan</button></div>`));
 }
-function submitBranch(id){
+// Sama kayak previewInventoryPhoto: preview lokal dulu pakai FileReader,
+// upload ke Cloudinary beneran baru pas Simpan diklik.
+function previewBranchPhoto(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){flash("Ukuran foto maksimal 5MB.");e.target.value="";return;}
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const box=document.getElementById("branch-photo-preview");
+    if(box)box.innerHTML=`<img src="${reader.result}" alt="" style="width:100%;max-width:220px;border-radius:8px;display:block;" />`;
+  };
+  reader.onerror=()=>flash("Gagal membaca file foto.");
+  reader.readAsDataURL(file);
+}
+function clearBranchPhoto(){
+  const urlInput=document.getElementById("branch-photo-url"); if(urlInput)urlInput.value="";
+  const fileInput=document.getElementById("branch-photo-file"); if(fileInput)fileInput.value="";
+  const box=document.getElementById("branch-photo-preview"); if(box)box.innerHTML="";
+}
+async function submitBranch(id){
   const name=document.getElementById("branch-name").value.trim();
   if(!name){flash("Nama cabang wajib diisi.");return;}
-  upsertBranch({id,name});
+  const fileInput=document.getElementById("branch-photo-file");
+  const file=fileInput&&fileInput.files[0];
+  let photoUrl=document.getElementById("branch-photo-url").value||"";
+  const btn=document.getElementById("branch-save-btn");
+  if(file){
+    if(btn){btn.disabled=true;btn.textContent="Mengunggah foto…";}
+    try{
+      photoUrl=await uploadToCloudinary(file);
+    }catch(err){
+      console.error(err);
+      flash("Cabang disimpan, tapi upload foto gagal: "+(err&&err.message?err.message:"cek koneksi internet."));
+    }
+    if(btn){btn.disabled=false;btn.textContent="Simpan";}
+  }
+  upsertBranch({id,name,photoUrl});
 }
 /* --------------------- Unit PS --------------------- */
 function renderUnits() {
