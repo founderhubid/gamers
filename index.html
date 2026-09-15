@@ -1724,6 +1724,15 @@ function normalize(raw) {
     password: String(c.password || ""), branchId: String(c.branchId)
   }));
 
+  // Promo/diskon per cabang — dipilih lewat dropdown saat kasir menutup
+  // transaksi (openFinishModal), lalu nilainya ikut tercatat di struk.
+  let promos = Array.isArray(settingsRow.promos) ? settingsRow.promos : [];
+  promos = promos.filter(p => p && p.id && p.name && p.branchId).map(p => ({
+    id: String(p.id), name: String(p.name), branchId: String(p.branchId),
+    type: p.type === "percent" ? "percent" : "nominal",
+    value: Number(p.value) || 0
+  }));
+
   // Kredensial admin sekarang disimpan di dokumen Settings (Firestore),
   // bukan ditulis langsung di source HTML. Fallback admin/admin123 dipakai
   // HANYA kalau Settings belum pernah di-set (instalasi baru), supaya tetap
@@ -1775,7 +1784,7 @@ function normalize(raw) {
   let headerPhotos = (settingsRow.headerPhotos && typeof settingsRow.headerPhotos === "object") ? settingsRow.headerPhotos : {};
   headerPhotos = Object.fromEntries(Object.entries(headerPhotos).filter(([k, v]) => k && v).map(([k, v]) => [String(k), String(v)]));
 
-  const settings = { businessName, defaultRate, branches, cashiers, admin, headerPhotos };
+  const settings = { businessName, defaultRate, branches, cashiers, promos, admin, headerPhotos };
   return { settings, units, activeRentals, transactions, members, inventory, queue, expenses };
 }
 
@@ -1783,7 +1792,7 @@ function normalize(raw) {
    State
 ========================================================= */
 let state = {
-  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], admin: { username: "admin", password: "admin123" }, headerPhotos: {} },
+  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], promos: [], admin: { username: "admin", password: "admin123" }, headerPhotos: {} },
   units: [], activeRentals: {}, transactions: [], members: [], inventory: [], queue: [], expenses: []
 };
 let currentTab = "dashboard";
@@ -1931,6 +1940,12 @@ function startApp(){
 }
 function getBranches(){return Array.isArray(state.settings.branches)&&state.settings.branches.length?state.settings.branches:[{id:"branch-main",name:"Cabang Utama"}];}
 function getBranchName(id){return (getBranches().find(b=>b.id===id)||{}).name||"Cabang Utama";}
+// Promo/diskon per cabang — dikelola admin di menu "Cabang & Unit", lalu
+// dipakai sebagai dropdown pilihan saat kasir menutup transaksi.
+function getPromos(){return Array.isArray(state.settings.promos)?state.settings.promos:[];}
+function getPromosForBranch(branchId){return getPromos().filter(p=>p.branchId===branchId);}
+function getPromo(id){return getPromos().find(p=>p.id===id);}
+function formatPromoValue(p){return p.type==="percent"?`${p.value}%`:rupiah(p.value);}
 function ensureSelectedBranch(){
   const bs=getBranches();
   if(currentUser&&currentUser.role==="kasir"&&currentUser.branchId&&bs.some(b=>b.id===currentUser.branchId)){
@@ -2067,6 +2082,7 @@ function persistSettings() {
     defaultRate: state.settings.defaultRate,
     branches: state.settings.branches,
     cashiers: state.settings.cashiers,
+    promos: state.settings.promos || [],
     adminUsername: admin.username,
     adminPassword: admin.password,
     headerPhotos: state.settings.headerPhotos || {}
@@ -2120,13 +2136,15 @@ function extendRental(unitId, addMinutes) {
   flash("Waktu sewa diperpanjang.");
 }
 
-function finishRental(unitId, payment, discount, frozenMs) {
+function finishRental(unitId, payment, discount, frozenMs, promoName) {
   const session = state.activeRentals[unitId];
   const unit = state.units.find(u => u.id === unitId);
   if (!session || !unit) return;
   const ms = frozenMs != null ? frozenMs : Date.now() - session.startTime;
   const minutes = Math.max(1, Math.round(ms / 60000));
   const rawAmount = (minutes / 60) * unit.rate;
+  const subtotal = Math.round(rawAmount);
+  const appliedDiscount = Math.max(0, Math.min(subtotal, Math.round(discount || 0)));
   const amount = Math.max(0, Math.round(rawAmount - (discount || 0)));
 
   const trx = {
@@ -2143,7 +2161,10 @@ function finishRental(unitId, payment, discount, frozenMs) {
     // transaksinya beneran dicatat & dibayar hari ini. Ini yang bikin
     // transaksi "nyasar" ke tanggal yang salah di laporan/dashboard.
     memberId: session.memberId || "", start: session.startTime, end: Date.now(),
-    minutes, amount, payment, note: session.note,
+    // subtotal/discount/promoName dicatat supaya rincian diskon ikut tampil
+    // di struk (modal, WA, PDF, & cetak) — bukan cuma nilai akhir (amount).
+    minutes, subtotal, discount: appliedDiscount, promoName: promoName || "",
+    amount, payment, note: session.note,
   };
   state.transactions.unshift(trx);
   delete state.activeRentals[unitId];
@@ -2166,6 +2187,11 @@ function finishRental(unitId, payment, discount, frozenMs) {
 // Struk ditampilkan begitu pembayaran selesai dicatat. Kalau penyewanya
 // bukan pelanggan terdaftar (memberId kosong = tamu biasa), kasih opsi
 // buat langsung nyimpen dia ke daftar pelanggan tanpa harus buka menu lain.
+// Fallback buat transaksi lama (sebelum field subtotal ada) yang punya
+// trx.discount tapi belum punya trx.subtotal tersimpan.
+function receiptSubtotal(trx) {
+  return trx.subtotal != null ? trx.subtotal : (trx.amount + (trx.discount || 0));
+}
 function openReceiptModal(trx) {
   const isGuest = !trx.memberId;
   const member = trx.memberId ? state.members.find(m => m.id === trx.memberId) : null;
@@ -2181,6 +2207,10 @@ function openReceiptModal(trx) {
       <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
       ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
       <div class="rp-receipt-line"></div>
+      ${trx.discount ? `
+      <div class="rp-receipt-row"><span>Subtotal</span><strong class="rp-mono">${rupiah(receiptSubtotal(trx))}</strong></div>
+      <div class="rp-receipt-row"><span>Diskon${trx.promoName ? ` (${esc(trx.promoName)})` : ""}</span><strong class="rp-mono" style="color:var(--rp-red);">- ${rupiah(trx.discount)}</strong></div>
+      <div class="rp-receipt-line"></div>` : ""}
       <div class="rp-receipt-row rp-receipt-total"><span>Total dibayar</span><strong class="rp-mono">${rupiah(trx.amount)}</strong></div>
     </div>
     <div id="receipt-save-customer">${isGuest ? `
@@ -2220,6 +2250,10 @@ function buildReceiptWaMessage(trx) {
     `🎮 Unit: ${trx.unitName}`,
     `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
     `💳 Metode bayar: ${trx.payment}`,
+    ...(trx.discount ? [
+      `🧾 Subtotal: ${rupiah(receiptSubtotal(trx))}`,
+      `🏷️ Diskon${trx.promoName ? ` (${trx.promoName})` : ""}: -${rupiah(trx.discount)}`,
+    ] : []),
     `💰 Total: ${rupiah(trx.amount)}`,
     ``,
     `Mohon maaf kalau ada kekurangan pelayanan dari kami hari ini 🙏 Masukan dari Kakak selalu kami tunggu supaya bisa lebih baik lagi ke depannya.`,
@@ -2248,6 +2282,10 @@ function receiptPdfRows(trx) {
     ["Metode bayar", trx.payment],
   ];
   if (trx.note) rows.push(["Catatan", trx.note]);
+  if (trx.discount) {
+    rows.push(["Subtotal", rupiah(receiptSubtotal(trx))]);
+    rows.push([trx.promoName ? `Diskon (${trx.promoName})` : "Diskon", `- ${rupiah(trx.discount)}`]);
+  }
   return rows;
 }
 function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
@@ -2348,14 +2386,7 @@ function printReceipt(trxId) {
   if (!trx) return;
   const w = window.open("", "_blank", "width=380,height=600");
   if (!w) { flash("Popup diblokir browser — izinkan popup buat cetak struk."); return; }
-  const rows = [
-    ["Tanggal", `${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`],
-    ["Penyewa", trx.customerName],
-    ["Unit", trx.unitName],
-    ["Durasi", fmtHMS(trx.minutes * 60000)],
-    ["Metode bayar", trx.payment],
-  ];
-  if (trx.note) rows.push(["Catatan", trx.note]);
+  const rows = receiptPdfRows(trx);
   w.document.write(`<!DOCTYPE html><html><head><title>Struk - ${esc(trx.unitName)}</title><style>
     @page{ margin: 8mm; }
     body{ font-family:'Courier New',monospace; font-size:12px; width:280px; margin:0 auto; padding:12px; color:#000; }
@@ -2977,7 +3008,8 @@ function openFinishModal(unitId) {
       <div class="rp-receipt-row rp-receipt-total"><span>Total</span><strong class="rp-mono" id="finish-total">${rupiah(ms/3600000*unit.rate)}</strong></div>
     </div>
     <p class="rp-dim">${isFixed ? "Sewa paket durasi tetap — total harga sudah dikunci sesuai paket, tidak berubah walau selesai lebih cepat atau lebih lama." : "Argo berhenti di sini — durasi dan total tidak akan bertambah lagi."}</p>
-    <label class="rp-field"><span>Diskon (Rp, opsional)</span><input id="finish-discount" type="number" min="0" value="0" oninput="updateFinishTotal('${unitId}')" /></label>
+    ${finishPromoFieldHtml(unit, unitId)}
+    <label class="rp-field"><span>Diskon (Rp, opsional)</span><input id="finish-discount" type="number" min="0" value="0" oninput="clearFinishPromoIfEdited('${unitId}')" /></label>
     <label class="rp-field"><span>Metode pembayaran</span>
       <select id="finish-payment"><option>Tunai</option><option>QRIS</option><option>Transfer</option></select>
     </label>
@@ -2986,6 +3018,40 @@ function openFinishModal(unitId) {
       <button class="rp-btn rp-btn-stop" onclick="confirmFinish('${unitId}')">${icon("stop",14)} Selesaikan &amp; catat</button>
     </div>
   `));
+}
+// Dropdown promo hanya dimunculkan kalau cabang unit ini punya promo
+// terdaftar (dikelola admin di menu Cabang & Unit). Pilih tanpa promo tetap
+// bisa isi diskon manual seperti biasa.
+function finishPromoFieldHtml(unit, unitId){
+  const promos = getPromosForBranch(unit.branchId || ensureSelectedBranch());
+  if (!promos.length) return "";
+  const options = `<option value="">Tanpa promo (diskon manual)</option>` +
+    promos.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(formatPromoValue(p))}</option>`).join("");
+  return `<label class="rp-field"><span>Promo/diskon cabang (opsional)</span>
+    <select id="finish-promo" onchange="applyPromoToFinish('${unitId}')">${options}</select>
+  </label>`;
+}
+function applyPromoToFinish(unitId){
+  const unit = state.units.find(u => u.id === unitId);
+  const promoSel = document.getElementById("finish-promo");
+  const discInput = document.getElementById("finish-discount");
+  if (!unit || !promoSel || !discInput || !window._finishStop || window._finishStop.unitId !== unitId) return;
+  const promoId = promoSel.value;
+  if (!promoId) { updateFinishTotal(unitId); return; }
+  const promo = getPromo(promoId);
+  if (!promo) return;
+  const rawAmount = window._finishStop.ms / 3600000 * unit.rate;
+  const discValue = promo.type === "percent" ? Math.round(rawAmount * promo.value / 100) : Math.round(promo.value);
+  discInput.value = Math.max(0, Math.min(discValue, Math.round(rawAmount)));
+  updateFinishTotal(unitId);
+}
+// Kalau kasir mengetik manual di kolom diskon setelah sempat memilih promo,
+// anggap promo itu dilepas (biar nama promo yang tercatat di struk tidak
+// menyesatkan — nilainya sudah bukan nilai promo yang dipilih lagi).
+function clearFinishPromoIfEdited(unitId){
+  const promoSel = document.getElementById("finish-promo");
+  if (promoSel) promoSel.value = "";
+  updateFinishTotal(unitId);
 }
 function updateFinishTotal(unitId) {
   const unit = state.units.find(u => u.id === unitId);
@@ -2998,6 +3064,8 @@ function updateFinishTotal(unitId) {
 function confirmFinish(unitId) {
   const payment = document.getElementById("finish-payment").value;
   const discount = Number(document.getElementById("finish-discount").value) || 0;
+  const promoSel = document.getElementById("finish-promo");
+  const promo = promoSel && promoSel.value ? getPromo(promoSel.value) : null;
   const frozenMs = window._finishStop && window._finishStop.unitId === unitId ? window._finishStop.ms : null;
   const totalText = document.getElementById("finish-total")?.textContent || "";
   openConfirmModal({
@@ -3005,7 +3073,7 @@ function confirmFinish(unitId) {
     message: `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
     confirmLabel: "Ya, selesaikan",
     onConfirm: () => {
-      finishRental(unitId, payment, discount, frozenMs);
+      finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "");
       window._finishStop = null;
     },
   });
@@ -3526,6 +3594,7 @@ function renderUnits() {
     <tbody>${rows||`<tr><td colspan="6">${emptyState("Belum ada unit pada cabang ini.")}</td></tr>`}</tbody></table></div>
     ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>`:""}
     ${isAdmin()?renderCashierSection():""}
+    ${isAdmin()?renderPromoSection():""}
     ${isAdmin()?renderAdminSection():""}
   </div>`;
 }
@@ -3633,6 +3702,83 @@ function removeCashierDirect(id){
   state.settings.cashiers=getCashiers().filter(c=>c.id!==id);
   renderAll(); persistSettings();
 }
+/* --------------------- Promo & diskon per cabang --------------------- */
+// Promo di sini murni template nilai diskon per cabang. Saat kasir menutup
+// transaksi (openFinishModal), promo yang cocok dengan cabang unit tersebut
+// muncul sebagai dropdown — memilihnya otomatis mengisi kolom diskon (tetap
+// bisa diubah manual), dan namanya ikut tercatat di struk pembayaran.
+function renderPromoSection(){
+  const promos = getPromos();
+  const rows = promos.map((p, i) => `
+    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(p.name)}</td><td>${esc(getBranchName(p.branchId))}</td>
+      <td class="rp-mono">${esc(formatPromoValue(p))}</td>
+      <td class="rp-td-actions"><div class="rp-row-actions">
+        <button class="rp-icon-btn" onclick="openPromoModal('${p.id}')" title="Ubah">${icon("pencil",15)}</button>
+        <button class="rp-icon-btn rp-icon-danger" onclick="removePromo('${p.id}')" title="Hapus">${icon("trash",15)}</button>
+      </div></td></tr>`).join("");
+  return `
+    <div class="rp-ruled-head">Promo &amp; diskon per cabang</div>
+    <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Daftar promo di sini muncul sebagai pilihan dropdown saat kasir menutup transaksi, sesuai cabang unitnya.</p>
+    <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openPromoModal('')">${icon("plus",14)} Tambah promo</button></div>
+    ${!promos.length ? emptyState("Belum ada promo/diskon. Tanpa promo, kasir tetap bisa mengisi diskon manual saat menutup transaksi.") : `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Nama promo</th><th>Cabang</th><th>Nilai</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+  `;
+}
+function openPromoModal(id){
+  const existing = getPromos().find(p=>p.id===id);
+  const p = existing || { id: uid(), name: "", branchId: ensureSelectedBranch(), type: "nominal", value: 0 };
+  const branchOptions = getBranches().map(b => `<option value="${esc(b.id)}" ${p.branchId===b.id?"selected":""}>${esc(b.name)}</option>`).join("");
+  openModal(modalShell(existing ? "Ubah promo" : "Tambah promo", `
+    <label class="rp-field"><span>Cabang</span><select id="promo-branch">${branchOptions}</select></label>
+    <label class="rp-field"><span>Nama promo</span><input id="promo-name" value="${esc(p.name)}" placeholder="Cth: Promo Jam Siang" autocomplete="off"></label>
+    <label class="rp-field"><span>Jenis diskon</span>
+      <select id="promo-type" onchange="togglePromoValueLabel()">
+        <option value="nominal" ${p.type!=="percent"?"selected":""}>Nominal (Rp)</option>
+        <option value="percent" ${p.type==="percent"?"selected":""}>Persen (%)</option>
+      </select>
+    </label>
+    <label class="rp-field"><span id="promo-value-label">${p.type==="percent"?"Nilai diskon (%)":"Nilai diskon (Rp)"}</span><input id="promo-value" type="number" min="0" value="${p.value||0}"></label>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
+      <button class="rp-btn rp-btn-start" onclick="submitPromo('${p.id}')">Simpan</button>
+    </div>
+  `));
+}
+function togglePromoValueLabel(){
+  const type = document.getElementById("promo-type")?.value;
+  const label = document.getElementById("promo-value-label");
+  if (label) label.textContent = type === "percent" ? "Nilai diskon (%)" : "Nilai diskon (Rp)";
+}
+function submitPromo(id){
+  const branchId = document.getElementById("promo-branch").value;
+  const name = document.getElementById("promo-name").value.trim();
+  const type = document.getElementById("promo-type").value === "percent" ? "percent" : "nominal";
+  let value = Number(document.getElementById("promo-value").value) || 0;
+  if (!name) { flash("Nama promo wajib diisi."); return; }
+  if (!branchId) { flash("Cabang wajib dipilih."); return; }
+  if (value <= 0) { flash("Nilai diskon harus lebih dari 0."); return; }
+  if (type === "percent") value = Math.min(100, value);
+  upsertPromo({ id, branchId, name, type, value });
+}
+function upsertPromo(p){
+  const list = getPromos().slice();
+  const idx = list.findIndex(x=>x.id===p.id);
+  if (idx>=0) list[idx]=p; else list.push(p);
+  state.settings.promos = list;
+  closeModal(); renderAll(); persistSettings();
+}
+function removePromo(id){
+  const p = getPromos().find(x=>x.id===id);
+  openConfirmModal({
+    title: "Hapus promo?",
+    message: `Promo "${p?p.name:"ini"}" akan dihapus permanen dan tidak akan muncul lagi di dropdown saat pembayaran.`,
+    confirmLabel: "Ya, hapus promo",
+    onConfirm: () => removePromoDirect(id),
+  });
+}
+function removePromoDirect(id){
+  state.settings.promos = getPromos().filter(p=>p.id!==id);
+  renderAll(); persistSettings();
+}
 /* --------------------- Riwayat --------------------- */
 function renderRiwayat() {
   const visibleTx = getVisibleTransactions();
@@ -3667,7 +3813,8 @@ function renderRiwayat() {
 function exportRiwayatCSV() {
   downloadXLSX("riwayat-sewa.xlsx", state.transactions.map(t => ({
     Tanggal: fmtDateID(t.end), Jam: fmtTimeID(t.end), Cabang: t.branchName || getBranchName(t.branchId), Unit: t.unitName, Penyewa: t.customerName,
-    "Durasi (menit)": t.minutes, "Total (Rp)": t.amount, Pembayaran: t.payment, Catatan: t.note || "",
+    "Durasi (menit)": t.minutes, "Subtotal (Rp)": receiptSubtotal(t), Promo: t.promoName || "", "Diskon (Rp)": t.discount || 0,
+    "Total (Rp)": t.amount, Pembayaran: t.payment, Catatan: t.note || "",
   })), "Riwayat Sewa");
 }
 
