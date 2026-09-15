@@ -32,11 +32,12 @@
   })();
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Playfair+Display:ital,wght@1,600;1,700;1,800&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
   :root {
     /* ===== Token yang SELALU sama di kedua tema (identitas brand) ===== */
     --rp-serif: 'Fraunces', Georgia, serif;
+    --rp-brand-font: 'Playfair Display', 'Fraunces', Georgia, serif;
     --rp-mono: 'IBM Plex Mono', 'Courier New', monospace;
     --rp-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --rp-btn-text: #F4F1E4;
@@ -195,7 +196,7 @@
   .rp-stat-row { display: flex; gap: 14px; flex-wrap: wrap; }
   .rp-stat-card { flex: 1; min-width: 160px; background: var(--rp-surface); border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px 16px; min-width: 0; box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
   .rp-stat-label { display: block; font-size: 11.5px; color: var(--rp-ink-dim); margin-bottom: 6px; overflow-wrap: break-word; }
-  .rp-stat-value { font-size: 20px; color: var(--rp-ink); overflow-wrap: break-word; font-family: var(--rp-mono); }
+  .rp-stat-value { font-size: 17px; color: var(--rp-ink); overflow-wrap: break-word; font-family: var(--rp-mono); }
 
   .rp-unit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
   .rp-card {
@@ -323,7 +324,9 @@
     color: var(--rp-ink); transition: background .15s ease, transform .15s ease;
     font-family: var(--rp-sans);
   }
-  .rp-user-trigger:hover { background: var(--rp-surface-2); }
+  @media (hover: hover) and (pointer: fine) {
+    .rp-user-trigger:hover { background: var(--rp-surface-2); }
+  }
   .rp-user-avatar {
     width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
     background: var(--rp-chip-bg); color: var(--rp-chip-text);
@@ -344,9 +347,16 @@
     transition: opacity .15s ease, transform .15s ease, visibility .15s;
     display: flex; flex-direction: column; gap: 6px;
   }
-  .rp-user-menu:hover .rp-user-popover,
   .rp-user-menu.is-open .rp-user-popover {
     opacity: 1; visibility: visible; transform: translateY(0);
+  }
+  /* Buka lewat hover CUMA buat perangkat yang beneran punya kursor. Di HP,
+     :hover nyangkut abis di-tap, itu yang bikin menu/nama nggak mau nutup
+     pas avatar diklik lagi. */
+  @media (hover: hover) and (pointer: fine) {
+    .rp-user-menu:hover .rp-user-popover {
+      opacity: 1; visibility: visible; transform: translateY(0);
+    }
   }
   .rp-theme-switch-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -412,7 +422,7 @@
     .rp-stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .rp-stat-card { padding: 10px 12px; }
     .rp-stat-label { font-size: 10.5px; margin-bottom: 4px; }
-    .rp-stat-value { font-size: 16px; }
+    .rp-stat-value { font-size: 14.5px; }
     .rp-delta-badge { font-size: 10px; }
 
     /* Kecilkan tombol & pastikan tidak meluber keluar card/modal */
@@ -527,8 +537,11 @@ body:before{
     cursor: default;
   }
   .rp-quickrail-name {
-    font-size: 8.5px; font-weight: 600; color: var(--rp-ink-dim); text-align: center;
-    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--rp-brand-font); font-style: italic;
+    font-size: 8.5px; font-weight: 800; color: var(--rp-ink); text-align: center;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    white-space: normal; line-height: 1.15; word-break: break-word;
     margin-bottom: 10px; cursor: pointer;
   }
   .rp-quickrail-title {
@@ -707,7 +720,7 @@ body:before{
   font-weight:600;
 }
 .rp-stat-value{
-  font-size:21px;
+  font-size:17px;
   font-weight:600;
   letter-spacing:-.025em;
 }
@@ -918,8 +931,10 @@ body:before{
   box-shadow:0 12px 28px -16px rgba(0,0,0,.8);
   transition:.16s ease;
 }
-.rp-user-trigger:hover{
-  transform:translateY(-1px);
+@media (hover: hover) and (pointer: fine){
+  .rp-user-trigger:hover{
+    transform:translateY(-1px);
+  }
 }
 .rp-user-avatar{
   width:26px;height:26px;
@@ -972,19 +987,27 @@ body:before{
   }
   .rp-quick-fan-btn{ color:var(--rp-ink); cursor:pointer; }
   .rp-btn-circle{
-    width:46px; height:46px; border-radius:50%; flex-shrink:0;
+    width:58px; height:58px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
+    /* padding bawah dipakai buat "ngangkat" icon dikit, jadi pasangan
+       icon+teks-nya yang ke-center di tengah bulatan, bukan icon doang */
+    padding-bottom:14px;
     background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
     box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
   }
   .rp-quick-fan-btn svg,
-  .rp-user-dropdown .rp-user-menu-btn svg{ width:16px; height:16px; flex-shrink:0; }
+  .rp-user-dropdown .rp-user-menu-btn svg{ width:18px; height:18px; flex-shrink:0; }
   .rp-user-dropdown .rp-btn-label{
-    position:absolute; left:50%; bottom:5px; transform:translateX(-50%);
-    display:block; font-size:6px; font-weight:600; line-height:1;
-    color:var(--rp-ink); text-align:center; max-width:38px;
+    position:absolute; left:50%; bottom:13px; transform:translateX(-50%);
+    display:block; font-size:0; font-weight:600; line-height:1;
+    color:var(--rp-ink); text-align:center; max-width:50px;
     background:none; border:none; padding:0; box-shadow:none;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;
+  }
+  /* Di HP teksnya pakai versi pendek (data-short) biar muat rapih di dalam
+     bulatan tanpa kepotong; di laptop tetep pakai label panjangnya. */
+  .rp-user-dropdown .rp-btn-label:after{
+    content:attr(data-short); font-size:8.5px; line-height:1; letter-spacing:.01em;
   }
   .rp-user-dropdown .rp-user-menu-danger .rp-btn-label{ color:var(--rp-red); }
   .rp-user-dropdown .rp-user-popover{
@@ -998,20 +1021,28 @@ body:before{
     background:none; border:none; box-shadow:none; padding:0; margin:0;
   }
   .rp-user-dropdown .rp-theme-switch{
-    width:46px; height:46px; border-radius:50%;
+    width:58px; height:58px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
+    padding-bottom:14px;
     background:var(--rp-surface-solid); border:1px solid var(--rp-border-strong);
     box-shadow:0 12px 26px -10px var(--rp-elevation-shadow);
   }
+  .rp-user-dropdown .rp-theme-switch.is-on{ background:var(--rp-surface-solid); }
   .rp-user-dropdown .rp-theme-switch-thumb{
-    position:static; width:18px; height:18px; transform:none;
+    position:static; width:18px; height:18px; transform:none; background:none; color:var(--rp-ink);
   }
+  .rp-user-dropdown .rp-theme-switch.is-on .rp-theme-switch-thumb{ left:auto; }
+  .rp-user-dropdown .rp-theme-switch-thumb svg{ width:18px; height:18px; }
   .rp-user-dropdown .rp-theme-switch-label{
-    position:absolute; left:50%; bottom:5px; transform:translateX(-50%);
-    display:block; font-size:6px; font-weight:600; line-height:1;
-    color:var(--rp-ink); text-align:center; max-width:38px;
+    position:absolute; left:50%; top:auto; bottom:13px; transform:translateX(-50%);
+    z-index:2;
+    display:block; font-size:0; font-weight:600; line-height:1;
+    color:var(--rp-ink); text-align:center; max-width:50px;
     background:none; border:none; padding:0; box-shadow:none;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;
+  }
+  .rp-user-dropdown .rp-theme-switch-label:after{
+    content:attr(data-short); font-size:8.5px; line-height:1; letter-spacing:.01em;
   }
   .rp-user-dropdown .rp-theme-switch-label svg{ display:none; }
   .rp-user-dropdown .rp-user-menu-danger{ color:var(--rp-red); }
@@ -1048,7 +1079,7 @@ body:before{
     border-radius:13px;
     padding:12px 13px;
   }
-  .rp-stat-value{font-size:16px}
+  .rp-stat-value{font-size:14.5px}
   .rp-unit-grid{
     grid-template-columns:repeat(2,minmax(0,1fr));
     gap:9px;
@@ -1199,7 +1230,7 @@ body:before{
     font-weight:700;font-size:16px;border-radius:13px;flex-shrink:0;
     box-shadow:0 12px 26px -12px var(--rp-elevation-shadow), inset 0 1px 0 rgba(255,255,255,.15);
   }
-  .rp-login-title{font-family:var(--rp-serif);font-size:23px;font-weight:700;letter-spacing:-.01em}
+  .rp-login-title{font-family:var(--rp-brand-font);font-style:italic;font-size:24px;font-weight:800;letter-spacing:-.01em}
   .rp-login-sub{font-size:12px;color:var(--rp-ink-dim);margin-top:3px;letter-spacing:.02em}
   .rp-login-card .rp-field{margin-bottom:14px}
   .rp-login-card .rp-field input{ font-size:14px; }
@@ -1219,15 +1250,23 @@ body:before{
    laptop) biar cuma keliatan buletan avatar aja, baru muncul (2 baris) pas
    di-hover pakai kursor (desktop) ATAU pas menu-nya dibuka (tap di HP). */
 .rp-user-id { display: none; }
-.rp-user-menu.is-open .rp-user-trigger .rp-user-id,
-.rp-user-menu:hover .rp-user-trigger .rp-user-id {
+.rp-user-menu.is-open .rp-user-trigger .rp-user-id {
   display: flex; flex-direction: column; align-items: flex-start; gap: 0;
   max-width: 108px; overflow: hidden;
 }
-.rp-user-menu.is-open .rp-user-name,
-.rp-user-menu:hover .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rp-user-menu.is-open .rp-user-role,
-.rp-user-menu:hover .rp-user-role { font-size: 8.5px; white-space: nowrap; }
+.rp-user-menu.is-open .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-user-menu.is-open .rp-user-role { font-size: 8.5px; white-space: nowrap; }
+/* Versi hover-nya khusus buat laptop/desktop yang pakai kursor beneran.
+   Di layar sentuh, :hover nempel terus abis di-tap, jadi nama+role tetep
+   nongol walau menu-nya udah ditutup. */
+@media (hover: hover) and (pointer: fine) {
+  .rp-user-menu:hover .rp-user-trigger .rp-user-id {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+    max-width: 108px; overflow: hidden;
+  }
+  .rp-user-menu:hover .rp-user-name { font-size: 11px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rp-user-menu:hover .rp-user-role { font-size: 8.5px; white-space: nowrap; }
+}
 @media (max-width: 390px) {
   .rp-user-menu.is-open .rp-user-id { max-width: 80px; }
   .rp-user-menu.is-open .rp-user-name { max-width: 64px; font-size: 10px; }
@@ -1400,13 +1439,13 @@ function renderUserMenu() {
       ${quickFanHtml()}
       <div class="rp-user-popover">
         <div class="rp-theme-switch-row">
-          <span class="rp-theme-switch-label">${icon(t === "dark" ? "moon" : "sun", 13)} Mode ${t === "dark" ? "gelap" : "terang"}</span>
+          <span class="rp-theme-switch-label" data-short="${t === "dark" ? "Terang" : "Gelap"}">${icon(t === "dark" ? "moon" : "sun", 13)} Mode ${t === "dark" ? "gelap" : "terang"}</span>
           <button type="button" class="rp-theme-switch${t === "dark" ? " is-on" : ""}" onclick="toggleTheme()" title="Ganti mode terang/gelap" aria-label="Ganti mode terang/gelap">
             <span class="rp-theme-switch-thumb">${icon(t === "dark" ? "moon" : "sun", 10)}</span>
           </button>
         </div>
-        <button type="button" class="rp-user-menu-btn" title="Ganti foto profil" onclick="triggerAvatarPicker()"><span class="rp-btn-circle">${icon("pencil", 14)}</span><span class="rp-btn-label">Ganti foto profil</span></button>
-        <button type="button" class="rp-user-menu-btn rp-user-menu-danger" title="Keluar" onclick="logoutApp()"><span class="rp-btn-circle">${icon("x", 14)}</span><span class="rp-btn-label">Keluar</span></button>
+        <button type="button" class="rp-user-menu-btn" title="Ganti foto profil" onclick="triggerAvatarPicker()"><span class="rp-btn-circle">${icon("pencil", 14)}</span><span class="rp-btn-label" data-short="Foto">Ganti foto profil</span></button>
+        <button type="button" class="rp-user-menu-btn rp-user-menu-danger" title="Keluar" onclick="logoutApp()"><span class="rp-btn-circle">${icon("x", 14)}</span><span class="rp-btn-label" data-short="Keluar">Keluar</span></button>
       </div>
     </div>
     <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarFile(event)">
@@ -1419,13 +1458,13 @@ function renderUserMenu() {
 // & animasinya udah diatur lewat CSS (.rp-user-dropdown / .rp-quick-fan).
 function quickFanHtml() {
   const items = [
-    { icon: "play", label: "Mulai sewa", fn: "quickStartRental()" },
-    { icon: "users", label: "Antrian", fn: "openQueueModal()" },
-    { icon: "user-plus", label: "Pelanggan", fn: "openMemberModal('')" },
-    ...(isAdmin() ? [{ icon: "wallet", label: "Pengeluaran", fn: "openExpenseModal('')" }] : []),
+    { icon: "play", label: "Mulai sewa", short: "Sewa", fn: "quickStartRental()" },
+    { icon: "users", label: "Antrian", short: "Antrian", fn: "openQueueModal()" },
+    { icon: "user-plus", label: "Pelanggan", short: "Member", fn: "openMemberModal('')" },
+    ...(isAdmin() ? [{ icon: "wallet", label: "Pengeluaran", short: "Biaya", fn: "openExpenseModal('')" }] : []),
   ];
   const btns = items.map((it) => {
-    return `<button type="button" class="rp-quick-fan-btn" title="${esc(it.label)}" onclick="${it.fn};closeUserMenu()"><span class="rp-btn-circle">${icon(it.icon, 15)}</span><span class="rp-btn-label">${it.label}</span></button>`;
+    return `<button type="button" class="rp-quick-fan-btn" title="${esc(it.label)}" onclick="${it.fn};closeUserMenu()"><span class="rp-btn-circle">${icon(it.icon, 15)}</span><span class="rp-btn-label" data-short="${esc(it.short || it.label)}">${it.label}</span></button>`;
   }).join("");
   return `<div class="rp-quick-fan">${btns}</div>`;
 }
@@ -1731,7 +1770,7 @@ function isAdmin(){ return currentUser?.role==="admin"; }
 function showLogin(errorMsg=""){
   currentUser=null; ready=false;
   document.getElementById("root").innerHTML=`<div class="rp-login-screen"><div class="rp-login-card">
-    <div class="rp-login-brand"><div class="rp-login-mark">PS</div><div><div class="rp-login-title">Rental PS</div><div class="rp-login-sub">Sistem Kasir Digital</div></div></div>
+    <div class="rp-login-brand"><div class="rp-login-mark">${esc(getInitials(state.settings.businessName))}</div><div><div class="rp-login-title">${esc(state.settings.businessName)}</div><div class="rp-login-sub">Sistem Kasir Digital</div></div></div>
     <label class="rp-field"><span>Username</span><input id="login-username" autocomplete="username" autofocus placeholder="Masukkan username"></label>
     <label class="rp-field"><span>Password</span><input id="login-password" type="password" autocomplete="current-password" placeholder="Masukkan password" onkeydown="if(event.key==='Enter')doLogin()"></label>
     <div class="rp-login-error">${esc(errorMsg)}</div>
@@ -3569,7 +3608,7 @@ function renderLaporan() {
           title: "Laba-Rugi",
           titleOnClick: "handleResetTitleClick()",
           subtitle: `${periodLabel} · ${esc(laporanBranchLabel())}`,
-          tools: `<button class="rp-btn rp-btn-ghost" onclick="closeLabaRugiProtected()">← Ringkasan</button>
+          tools: `<button class="rp-btn rp-btn-start" onclick="closeLabaRugiProtected()">← Ringkasan</button>
             <button class="rp-btn rp-btn-ghost" onclick="exportLabaRugiCSV()">${icon('download',14)} Ekspor Excel</button>`
         })}
         <div class="rp-field-row" style="margin-bottom:18px;align-items:flex-end;">
@@ -3630,7 +3669,7 @@ function renderLaporan() {
         key: "laporan",
         title: "Laporan",
         subtitle: `Ringkasan pendapatan bulan terpilih · ${esc(laporanBranchLabel())}`,
-        tools: `<button class="rp-btn rp-btn-ghost" onclick="openLabaRugiProtected()">Klik Untuk Update Laba-Rugi</button>`
+        tools: `<button class="rp-btn rp-btn-start" onclick="openLabaRugiProtected()">Klik Untuk Update Laba-Rugi</button>`
       })}
 
       <div class="rp-field-row" style="margin-bottom:18px;align-items:flex-end;">
