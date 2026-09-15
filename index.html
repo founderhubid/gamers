@@ -1323,6 +1323,102 @@ body:before{
   .rp-user-menu.is-open .rp-user-role { font-size: 8px; }
 }
 
+/* =====================================================================
+   TEMA "NEON ARENA" — override tampilan gelap jadi biru neon bergaya
+   gaming, terinspirasi mockup. Semua rule di bawah ini HANYA mengubah
+   warna/efek visual lewat token yang sudah dipakai di seluruh app —
+   TIDAK ada HTML/JS yang diubah, jadi semua fitur & fungsi tetap sama
+   persis. Berlaku untuk mode gelap (default); mode terang tidak disentuh.
+   ===================================================================== */
+:root {
+  --rp-page-bg: #050912;
+  --rp-grid-line: rgba(70,150,255,0.07);
+  --rp-grid-dot: rgba(70,150,255,0.10);
+  --rp-sidebar-bg: linear-gradient(180deg, rgba(7,13,28,0.97), rgba(3,6,15,0.98));
+  --rp-surface: rgba(11,19,40,0.72);
+  --rp-surface-2: rgba(15,25,50,0.8);
+  --rp-surface-solid: #0A1226;
+  --rp-border: rgba(84,155,255,0.28);
+  --rp-border-strong: rgba(110,180,255,0.55);
+  --rp-ink: #EAF3FF;
+  --rp-ink-dim: #7FA0D0;
+  --rp-line: rgba(84,155,255,0.24);
+  --rp-hover-tint: rgba(84,155,255,0.14);
+  --rp-input-bg: rgba(84,155,255,0.07);
+  --rp-th-bg: rgba(84,155,255,0.09);
+  --rp-neutral-tint: rgba(84,155,255,0.16);
+  --rp-overlay: rgba(2,4,12,0.78);
+  --rp-elevation-shadow: rgba(0,8,35,0.75);
+  --rp-panel-shadow: 0 0 0 1px rgba(84,155,255,0.16), 0 22px 48px -20px rgba(0,15,60,0.85), 0 0 26px -10px rgba(70,150,255,0.35);
+  --rp-panel-highlight: rgba(160,205,255,0.14);
+  --rp-scrollbar: rgba(84,155,255,0.4);
+  --rp-scrollbar-hover: rgba(84,155,255,0.62);
+  --rp-focus-ring: rgba(110,180,255,0.4);
+  --rp-accent-rgb: 92,175,255;
+
+  --rp-chip-bg: linear-gradient(135deg,#2E7CF6,#57B7FF);
+  --rp-chip-text: #05101F;
+
+  --rp-red: #FF5C7C;
+  --rp-red-tint: rgba(255,92,124,0.16);
+  --rp-red-ring: rgba(255,92,124,0.5);
+  --rp-red-glow: rgba(255,92,124,0.5);
+  --rp-teal: #2BE8B0;
+  --rp-teal-tint: rgba(43,232,176,0.15);
+  --rp-amber: #FFC257;
+  --rp-amber-tint: rgba(255,194,87,0.16);
+  --rp-navy: #57C4FF;
+  --rp-navy-soft: #2E7CF6;
+}
+
+/* Latar app: beberapa "blob" cahaya biru mengambang, statis (nggak dianimasi
+   biar hemat baterai HP) — meniru nuansa cahaya biru di mockup. */
+#root { position: relative; }
+#root::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(640px 420px at 8% -6%, rgba(70,150,255,0.16), transparent 62%),
+    radial-gradient(560px 460px at 96% 8%, rgba(90,190,255,0.13), transparent 60%),
+    radial-gradient(720px 520px at 50% 108%, rgba(46,124,246,0.14), transparent 60%);
+}
+.rp-sidebar, .rp-main, #modal-root { position: relative; z-index: 1; }
+
+/* Sidebar: garis tepi berpendar + brand mark jadi chip neon */
+.rp-sidebar { border-right: 1px solid var(--rp-border); box-shadow: 6px 0 30px -18px rgba(70,150,255,0.5); }
+.rp-brand-mark { box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset, 0 8px 22px -8px rgba(46,124,246,0.7), 0 0 18px -4px rgba(87,196,255,0.8); }
+.rp-nav-item.is-active { box-shadow: 0 6px 18px -8px var(--rp-elevation-shadow), 0 0 20px -6px rgba(87,196,255,0.75); }
+.rp-nav-item:hover { color: var(--rp-navy); }
+.rp-sync-dot { box-shadow: 0 0 8px currentColor; }
+
+/* Kartu, KPI, tabel: aksen garis atas jadi gradien biru berpendar */
+.rp-card::before {
+  background: linear-gradient(90deg, var(--rp-navy-soft), var(--rp-navy));
+  box-shadow: 0 0 14px -2px var(--rp-navy);
+}
+.rp-stat-card, .rp-card, .rp-table-wrap, .rp-chart-box { background-color: var(--rp-surface); backdrop-filter: blur(6px); }
+.rp-stat-value { color: var(--rp-navy); text-shadow: 0 0 14px rgba(87,196,255,0.35); }
+.rp-clickable:hover { box-shadow: 0 18px 38px -16px var(--rp-elevation-shadow), 0 0 24px -6px rgba(87,196,255,0.4), inset 0 1px 0 var(--rp-panel-highlight); }
+
+/* Status pill (mis. "KOSONG") diberi glow senada mockup */
+.rp-stamp { box-shadow: 0 0 10px -3px currentColor; }
+.rp-stamp-available { box-shadow: 0 0 12px -2px var(--rp-teal); }
+
+/* Tombol utama ("Mulai Sewa", dst.) jadi gradien biru berpendar seperti mockup */
+.rp-btn-start {
+  background: linear-gradient(135deg, #2E7CF6, #57C4FF);
+  box-shadow: 0 8px 20px -10px rgba(46,124,246,0.9), 0 0 16px -4px rgba(87,196,255,0.7);
+}
+.rp-btn-start:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 10px 24px -10px rgba(46,124,246,0.95), 0 0 22px -4px rgba(87,196,255,0.9); }
+.rp-icon-btn:hover { box-shadow: 0 0 10px -3px rgba(87,196,255,0.6); }
+
+/* Tabel: header & baris terasa seperti panel kaca */
+.rp-table th { color: var(--rp-navy); letter-spacing: 0.03em; }
+.rp-table tbody tr:hover { background: rgba(84,155,255,0.07); }
+
+/* Scrollbar tipis bertema biru (WebKit) */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--rp-scrollbar); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--rp-scrollbar-hover); }
 </style>
 </head>
 <body>
