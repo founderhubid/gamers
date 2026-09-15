@@ -2401,6 +2401,16 @@ function upsertUnit(unit) {
 }
 function removeUnit(id) {
   if (state.activeRentals[id]) return;
+  const u = state.units.find(x => x.id === id);
+  openConfirmModal({
+    title: "Hapus unit?",
+    message: `Unit "${u ? u.name : "ini"}" akan dihapus permanen dari daftar. Tindakan ini tidak bisa dibatalkan.`,
+    confirmLabel: "Ya, hapus unit",
+    onConfirm: () => removeUnitDirect(id),
+  });
+}
+function removeUnitDirect(id) {
+  if (state.activeRentals[id]) return;
   state.units = state.units.filter(u => u.id !== id);
   window._alertedUnits.delete(id);
   renderAll(); persistUnits();
@@ -2418,14 +2428,32 @@ function upsertMember(m) {
   else state.members.push({ ...m, visits: 0, totalSpent: 0, joined: Date.now() });
   closeModal(); renderAll(); persistMembers();
 }
-function removeMember(id) { state.members = state.members.filter(m => m.id !== id); renderAll(); persistMembers(); }
+function removeMember(id) {
+  const m = state.members.find(x => x.id === id);
+  openConfirmModal({
+    title: "Hapus pelanggan?",
+    message: `Data pelanggan "${m ? m.name : "ini"}" (riwayat kunjungan & total belanjanya) akan dihapus permanen.`,
+    confirmLabel: "Ya, hapus pelanggan",
+    onConfirm: () => removeMemberDirect(id),
+  });
+}
+function removeMemberDirect(id) { state.members = state.members.filter(m => m.id !== id); renderAll(); persistMembers(); }
 
 function upsertInventory(item) {
   const idx = state.inventory.findIndex(x => x.id === item.id);
   if (idx >= 0) state.inventory[idx] = item; else state.inventory.push(item);
   closeModal(); renderAll(); persistInventory();
 }
-function removeInventory(id) { state.inventory = state.inventory.filter(i => i.id !== id); renderAll(); persistInventory(); }
+function removeInventory(id) {
+  const it = state.inventory.find(x => x.id === id);
+  openConfirmModal({
+    title: "Hapus item stok?",
+    message: `Item "${it ? it.name : "ini"}" akan dihapus permanen dari daftar stok & servis.`,
+    confirmLabel: "Ya, hapus item",
+    onConfirm: () => removeInventoryDirect(id),
+  });
+}
+function removeInventoryDirect(id) { state.inventory = state.inventory.filter(i => i.id !== id); renderAll(); persistInventory(); }
 
 /* --------------------- Pengeluaran (untuk Laba Rugi) --------------------- */
 const EXPENSE_CATEGORIES = ["Operasional (listrik/internet)", "Sewa tempat", "Gaji/THR", "Perawatan & servis alat", "Pembelian stok", "Lainnya"];
@@ -2434,7 +2462,16 @@ function upsertExpense(exp) {
   if (idx >= 0) state.expenses[idx] = exp; else state.expenses.push(exp);
   closeModal(); renderAll(); persistExpenses();
 }
-function removeExpense(id) { state.expenses = state.expenses.filter(e => e.id !== id); renderAll(); persistExpenses(); }
+function removeExpense(id) {
+  const e = state.expenses.find(x => x.id === id);
+  openConfirmModal({
+    title: "Hapus pengeluaran?",
+    message: `Catatan pengeluaran "${e ? (e.description || e.category) : "ini"}"${e ? ` sebesar ${rupiah(e.amount)}` : ""} akan dihapus permanen dan bakal mempengaruhi laporan laba-rugi.`,
+    confirmLabel: "Ya, hapus",
+    onConfirm: () => removeExpenseDirect(id),
+  });
+}
+function removeExpenseDirect(id) { state.expenses = state.expenses.filter(e => e.id !== id); renderAll(); persistExpenses(); }
 function openExpenseModal(expenseId) {
   const existing = state.expenses.find(e => e.id === expenseId);
   const e = existing || { id: uid(), date: Date.now(), category: EXPENSE_CATEGORIES[0], description: "", amount: 0, branchId: ensureSelectedBranch() };
@@ -2485,10 +2522,19 @@ function addToQueue(customerName, phone, unitId, note) {
 }
 function removeFromQueue(id) {
   const q = state.queue.find(x => x.id === id);
+  openConfirmModal({
+    title: "Batalkan antrian?",
+    message: `Antrian atas nama "${q ? q.customerName : "ini"}" akan dibatalkan dan dihapus dari daftar.`,
+    confirmLabel: "Ya, batalkan",
+    onConfirm: () => removeFromQueueDirect(id),
+  });
+}
+function removeFromQueueDirect(id) {
+  const q = state.queue.find(x => x.id === id);
   state.queue = state.queue.filter(x => x.id !== id);
   persistQueue();
   renderAll();
-  if (document.getElementById("queue-name")) openQueueModal(); else closeModal();
+  openQueueModal();
   flash(q ? `Antrian ${q.customerName} dibatalkan.` : "Antrian dibatalkan.");
 }
 function submitQueue() {
@@ -2716,6 +2762,28 @@ function modalShell(title, bodyHtml) {
   </div>`;
 }
 
+// ---- Konfirmasi generik buat aksi krusial (hapus data, tutup transaksi,
+// dll) — dipanggil sebelum aksi asli dijalankan, supaya salah pencet nggak
+// langsung mengubah/menghapus data. `onConfirm` disimpan sementara di
+// window._rpConfirmAction dan baru dieksekusi kalau tombol konfirmasi
+// beneran ditekan; kalau modal ditutup/dibatalkan, aksinya nggak jalan.
+function openConfirmModal(opts) {
+  window._rpConfirmAction = typeof opts.onConfirm === "function" ? opts.onConfirm : null;
+  openModal(modalShell(opts.title || "Konfirmasi", `
+    <p style="margin:0;line-height:1.55;color:var(--rp-ink);">${esc(opts.message || "Yakin ingin melanjutkan aksi ini?")}</p>
+    <div class="rp-modal-foot">
+      <button class="rp-btn rp-btn-ghost" onclick="closeModal()">${esc(opts.cancelLabel || "Batal")}</button>
+      <button class="rp-btn ${opts.danger === false ? "rp-btn-start" : "rp-btn-stop"}" onclick="runRpConfirmAction()">${opts.danger === false ? "" : icon("trash",14)} ${esc(opts.confirmLabel || "Ya, lanjutkan")}</button>
+    </div>
+  `));
+}
+function runRpConfirmAction() {
+  const fn = window._rpConfirmAction;
+  window._rpConfirmAction = null;
+  closeModal();
+  if (typeof fn === "function") fn();
+}
+
 /* ===================== Reset data (fitur tersembunyi) =====================
    Sengaja tidak ada petunjuk visual di UI manapun. Diaktifkan dengan klik
    5x berturut-turut (dalam <1.2 detik) pada judul halaman "Laba-Rugi". */
@@ -2931,8 +2999,16 @@ function confirmFinish(unitId) {
   const payment = document.getElementById("finish-payment").value;
   const discount = Number(document.getElementById("finish-discount").value) || 0;
   const frozenMs = window._finishStop && window._finishStop.unitId === unitId ? window._finishStop.ms : null;
-  finishRental(unitId, payment, discount, frozenMs);
-  window._finishStop = null;
+  const totalText = document.getElementById("finish-total")?.textContent || "";
+  openConfirmModal({
+    title: "Tutup transaksi ini?",
+    message: `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
+    confirmLabel: "Ya, selesaikan",
+    onConfirm: () => {
+      finishRental(unitId, payment, discount, frozenMs);
+      window._finishStop = null;
+    },
+  });
 }
 
 /* --------------------- Alarm & perpanjang waktu --------------------- */
@@ -3352,6 +3428,18 @@ function upsertBranch(branch){
 }
 function removeBranch(id){
   if(state.units.some(u=>u.branchId===id)){flash("Cabang tidak bisa dihapus karena masih memiliki unit.");return;}
+  const bs=getBranches();
+  if(bs.length<=1){flash("Minimal harus ada 1 cabang.");return;}
+  const b = bs.find(x=>x.id===id);
+  openConfirmModal({
+    title: "Hapus cabang?",
+    message: `Cabang "${b?b.name:"ini"}" akan dihapus permanen. Data pengeluaran/laporan lama yang tertaut ke cabang ini tetap tersimpan.`,
+    confirmLabel: "Ya, hapus cabang",
+    onConfirm: () => removeBranchDirect(id),
+  });
+}
+function removeBranchDirect(id){
+  if(state.units.some(u=>u.branchId===id)){flash("Cabang tidak bisa dihapus karena masih memiliki unit.");return;}
   const bs=getBranches().filter(b=>b.id!==id);
   if(!bs.length){flash("Minimal harus ada 1 cabang.");return;}
   state.settings.branches=bs; ensureSelectedBranch(); renderAll(); persistSettings();
@@ -3533,6 +3621,15 @@ function upsertCashier(c){
   closeModal(); renderAll(); persistSettings();
 }
 function removeCashier(id){
+  const c = getCashiers().find(x=>x.id===id);
+  openConfirmModal({
+    title: "Hapus akun kasir?",
+    message: `Akun kasir "${c?(c.name||c.username):"ini"}" akan dihapus permanen dan tidak bisa login lagi.`,
+    confirmLabel: "Ya, hapus akun",
+    onConfirm: () => removeCashierDirect(id),
+  });
+}
+function removeCashierDirect(id){
   state.settings.cashiers=getCashiers().filter(c=>c.id!==id);
   renderAll(); persistSettings();
 }
