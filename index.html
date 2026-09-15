@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Rental PS - Kasir Digital</title>
+<title>Rental PS — Kasir Digital</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%231B2C4D'/%3E%3Cstop offset='1' stop-color='%230F1830'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23bg)'/%3E%3Cg fill='%23F4F1E4'%3E%3Crect x='7' y='21' width='50' height='19' rx='9.5'/%3E%3Ccircle cx='16' cy='39' r='11.5'/%3E%3Ccircle cx='48' cy='39' r='11.5'/%3E%3C/g%3E%3Cg fill='%2314213B'%3E%3Crect x='14.3' y='25.2' width='3.4' height='13' rx='1.7'/%3E%3Crect x='9.3' y='30.2' width='13' height='3.4' rx='1.7'/%3E%3Ccircle cx='41.5' cy='26.5' r='2.5'/%3E%3Ccircle cx='48' cy='33' r='2.5'/%3E%3Ccircle cx='35' cy='33' r='2.5'/%3E%3Ccircle cx='41.5' cy='39.5' r='2.5'/%3E%3C/g%3E%3C/svg%3E" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="manifest" href="manifest.json" />
@@ -2125,6 +2125,10 @@ function startRental(unitId, customerName, memberId, note, plannedMinutes) {
   const unit = state.units.find(u => u.id === unitId);
   if (unit) unit.status = "active";
   closeModal();
+  // Selalu arahkan ke Dashboard begitu sewa dimulai — ini "rumah"-nya unit
+  // yang lagi jalan (timer, tombol Selesai & Bayar, dll), baik dipicu dari
+  // menu akses cepat (rel kiri/fan avatar) maupun langsung dari kartu unit.
+  currentTab = "dashboard";
   renderAll();
   persistActive(); persistUnits();
   flash(`${unit ? unit.name : "Unit"} mulai disewa${endTime ? ` — durasi ${plannedMinutes} menit` : ""}`);
@@ -2480,7 +2484,11 @@ function upsertMember(m) {
   const idx = state.members.findIndex(x => x.id === m.id);
   if (idx >= 0) state.members[idx] = { ...state.members[idx], ...m };
   else state.members.push({ ...m, visits: 0, totalSpent: 0, joined: Date.now() });
-  closeModal(); renderAll(); persistMembers();
+  closeModal();
+  // Arahkan ke halaman Pelanggan — baik ini ditambahkan lewat menu akses
+  // cepat dari tab manapun, atau diubah langsung dari tabel di halaman ini.
+  currentTab = "member";
+  renderAll(); persistMembers();
 }
 function removeMember(id) {
   const m = state.members.find(x => x.id === id);
@@ -2514,7 +2522,14 @@ const EXPENSE_CATEGORIES = ["Operasional (listrik/internet)", "Sewa tempat", "Ga
 function upsertExpense(exp) {
   const idx = state.expenses.findIndex(x => x.id === exp.id);
   if (idx >= 0) state.expenses[idx] = exp; else state.expenses.push(exp);
-  closeModal(); renderAll(); persistExpenses();
+  closeModal();
+  // Pengeluaran hidup di dalam tampilan Laba-Rugi (sub-halaman Laporan yang
+  // di-gate lewat _laporanProtectedOpen) — arahkan ke situ langsung supaya
+  // hasil inputnya kelihatan, baik dipicu dari menu akses cepat maupun dari
+  // tombol "Catat pengeluaran" di halaman Laba-Rugi itu sendiri. Dijaga
+  // isAdmin() karena tab Laporan memang khusus admin.
+  if (isAdmin()) { currentTab = "laporan"; window._laporanProtectedOpen = true; }
+  renderAll(); persistExpenses();
 }
 function removeExpense(id) {
   const e = state.expenses.find(x => x.id === id);
@@ -2570,6 +2585,10 @@ function getVisibleQueue(){ const bid=ensureSelectedBranch(); return state.queue
 function addToQueue(customerName, phone, unitId, note) {
   state.queue.push({ id: uid(), customerName: customerName || "Tamu", phone: phone || "", unitId: unitId || null, note: note || "", requestedAt: Date.now(), branchId: ensureSelectedBranch() });
   persistQueue();
+  // Antrian nggak punya halaman sendiri — "rumah"-nya ada di Dashboard
+  // (kartu statistik "Antrian menunggu" & tombol antrian per unit), jadi
+  // arahkan ke situ di belakang modal antrian yang kebuka.
+  currentTab = "dashboard";
   renderAll();
   openQueueModal();
   flash(`${customerName || "Tamu"} ditambahkan ke antrian.`);
