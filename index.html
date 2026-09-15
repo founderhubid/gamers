@@ -317,7 +317,18 @@
   .rp-chart-box { border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
   .rp-chart-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 12px; color: var(--rp-ink-dim); flex-wrap: wrap; }
   .rp-legend-item { display: flex; align-items: center; gap: 6px; }
-  .rp-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+  .rp-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .rp-donut-legend { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--rp-ink-dim); min-width: 180px; }
+  @media (max-width: 720px) {
+    .rp-chart-legend { gap: 10px; font-size: 10px; }
+    .rp-legend-item { gap: 4px; }
+    .rp-legend-swatch { width: 11px; height: 2.5px; }
+    .rp-donut-legend { font-size: 10px; min-width: 0; gap: 5px; }
+  }
+  @media (max-width: 360px) {
+    .rp-chart-legend { font-size: 9px; }
+    .rp-donut-legend { font-size: 9px; }
+  }
   .rp-delta-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 20px; margin-top: 4px; }
   .rp-delta-up { color: var(--rp-teal); background: var(--rp-teal-tint); }
   .rp-delta-down { color: var(--rp-red); background: var(--rp-red-tint); }
@@ -4442,7 +4453,7 @@ function svgWaterfallChart(totalRevenue, categories, netProfit) {
   // supaya semuanya pas dalam lebar layar tanpa perlu digeser.
   const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
   const w = isMobile ? 330 : 760, h = isMobile ? 260 : 300;
-  const padL = isMobile ? 50 : 80, padB = isMobile ? 40 : 46, padT = isMobile ? 22 : 26, padR = isMobile ? 8 : 16;
+  const padL = isMobile ? 50 : 80, padB = isMobile ? 52 : 58, padT = isMobile ? 22 : 26, padR = isMobile ? 8 : 16;
   const chartW = w - padL - padR, chartH = h - padT - padB;
   const allVals = steps.flatMap(s => [s.from, s.to]);
   let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
@@ -4456,7 +4467,6 @@ function svgWaterfallChart(totalRevenue, categories, netProfit) {
   const gridFont = isMobile ? 8 : 10;
   const valFont = isMobile ? 8.5 : 10.5;
   const labFont = isMobile ? 8 : 10;
-  const labMaxChars = isMobile ? 7 : 13;
 
   let gridLines = "";
   const gsteps = 4;
@@ -4483,8 +4493,10 @@ function svgWaterfallChart(totalRevenue, categories, netProfit) {
       onclick="tapWaterfallHover('${escJsAttr(s.label)}', ${s.to-s.from}, ${isDecrease}, event.clientX, event.clientY)" />`;
     const valLabel = (i===0 || i===steps.length-1) ? fmtY(s.to) : `-${fmtY(s.amount)}`;
     labelsSvg += `<text x="${cx.toFixed(1)}" y="${Math.max(14,top-8).toFixed(1)}" font-family="var(--rp-mono)" font-size="${valFont}" fill="var(--rp-ink)" text-anchor="middle" font-weight="600">${esc(valLabel)}</text>`;
-    const lab = s.label.length > labMaxChars ? s.label.slice(0,labMaxChars-1)+'…' : s.label;
-    labelsSvg += `<text x="${cx.toFixed(1)}" y="${h-padB+18}" font-family="var(--rp-sans)" font-size="${labFont}" fill="var(--rp-ink-dim)" text-anchor="middle">${esc(lab)}</text>`;
+    // Label dimiringkan (bukan dipotong pakai "…") biar nama kategori yang
+    // panjang tetap kebaca utuh walau ruang di bawah tiap bar sempit.
+    const labX = cx, labY = h - padB + 14;
+    labelsSvg += `<text x="${labX.toFixed(1)}" y="${labY.toFixed(1)}" font-family="var(--rp-sans)" font-size="${labFont}" fill="var(--rp-ink-dim)" text-anchor="end" transform="rotate(-38 ${labX.toFixed(1)} ${labY.toFixed(1)})">${esc(s.label)}</text>`;
     if (i > 0) {
       const prevCx = padL + bandW*(i-1) + bandW/2;
       const prevY = yFor(steps[i-1].to);
@@ -4536,7 +4548,7 @@ function svgExpenseDonutChart(categories, totalExpense) {
   }).join('');
   return `<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:flex-start;">
     <svg viewBox="0 0 200 200" style="width:190px;height:190px;flex-shrink:0;">${arcs}${centerLabel}</svg>
-    <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--rp-ink-dim);min-width:180px;">${legend}</div>
+    <div class="rp-donut-legend">${legend}</div>
   </div>`;
 }
 
