@@ -261,6 +261,13 @@
   .rp-table th.rp-th-no, .rp-table td.rp-td-no { width: 1%; white-space: nowrap; text-align: center; padding-left: 10px; padding-right: 10px; }
   /* Kolom aksi: ikon selalu serata tengah vertikal & sejajar dalam satu baris,
      nggak peduli kolom lain di baris itu tinggi (misal tanggal 2 baris) */
+  /* PENTING: flex JANGAN langsung di <td> — <td class="rp-row-actions"> lama
+     bikin cell itu jadi flex-container, sehingga browser menghitung tinggi
+     baris itu beda dari sel lain di baris yang sama (masih table-cell biasa),
+     akibatnya garis bawah/border baris kolom Aksi jadi tidak lurus/sejajar
+     dengan kolom lain. Sekarang <td> dibiarkan table-cell normal (rp-td-actions),
+     dan flex dipindah ke <div class="rp-row-actions"> di DALAM td tsb. */
+  .rp-td-actions { width: 1%; white-space: nowrap; }
   .rp-row-actions { display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px; }
   .rp-dim { color: var(--rp-ink-dim); font-size: 11px; }
 
@@ -2414,11 +2421,11 @@ function openQueueModal(prefUnitId) {
       <td>${esc(q.phone || "-")}</td>
       <td>${esc(unitName)}</td>
       <td class="rp-dim">${fmtTimeID(q.requestedAt)}</td>
-      <td class="rp-row-actions">
+      <td class="rp-td-actions"><div class="rp-row-actions">
         ${availableUnits.length ? `<select id="assign-sel-${q.id}" style="font-size:11px;max-width:110px;">${assignOptions}</select>
         <button class="rp-icon-btn" title="Mulai sewa" onclick="assignQueueEntry('${q.id}')">${icon("play",15)}</button>` : `<span class="rp-dim">Belum ada unit kosong</span>`}
         <button class="rp-icon-btn rp-icon-danger" title="Batalkan" onclick="removeFromQueue('${q.id}')">${icon("trash",15)}</button>
-      </td>
+      </div></td>
     </tr>`;
   }).join("");
   openModal(modalShell("Antrian sewa", `
@@ -3291,15 +3298,15 @@ function renderUnits() {
   const rows = visibleUnits.map((u, i) => `
     <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(u.name)}</td><td>${esc(u.branchName || branch)}</td><td class="rp-mono">${rupiah(u.rate)}</td>
       <td><span class="rp-stamp rp-stamp-${u.status} rp-stamp-inline">${u.status==="available"?"Kosong":u.status==="active"?"Disewa":"Servis"}</span></td>
-      <td class="rp-row-actions">
+      <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openUnitModal('${u.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn" onclick="toggleMaint('${u.id}')" ${u.status==="active"?"disabled":""} title="Servis">${icon("wrench",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeUnit('${u.id}')" ${state.activeRentals[u.id]?"disabled":""} title="Hapus">${icon("trash",15)}</button>
-      </td></tr>`).join("");
+      </div></td></tr>`).join("");
   const branchRows = getBranches().map((b, i) => `
     <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(b.name)}</td><td class="rp-mono">${state.units.filter(u=>u.branchId===b.id).length}</td>
-      <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openBranchModal('${b.id}')" title="Ubah">${icon("pencil",15)}</button>
-      <button class="rp-icon-btn rp-icon-danger" onclick="removeBranch('${b.id}')" title="Hapus">${icon("trash",15)}</button></td></tr>`).join("");
+      <td class="rp-td-actions"><div class="rp-row-actions"><button class="rp-icon-btn" onclick="openBranchModal('${b.id}')" title="Ubah">${icon("pencil",15)}</button>
+      <button class="rp-icon-btn rp-icon-danger" onclick="removeBranch('${b.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("");
   return `<div class="rp-page">
     ${pageHeaderBanner({
       key: "units",
@@ -3325,7 +3332,7 @@ function renderAdminSection(){
     <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Username &amp; password untuk login sebagai Administrator (akses penuh, semua cabang).</p>
     <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Username</th><th>Password</th><th></th></tr></thead>
       <tbody><tr><td class="rp-mono rp-td-no">1</td><td>${esc(admin.username)}</td><td class="rp-mono">${esc(admin.password)}</td>
-        <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openAdminModal()" title="Ubah">${icon("pencil",15)}</button></td>
+        <td class="rp-td-actions"><div class="rp-row-actions"><button class="rp-icon-btn" onclick="openAdminModal()" title="Ubah">${icon("pencil",15)}</button></div></td>
       </tr></tbody></table></div>
   `;
 }
@@ -3362,10 +3369,10 @@ function renderCashierSection(){
   const cashiers = getCashiers();
   const rows = cashiers.map((c, i) => `
     <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(c.username)}</td><td class="rp-mono">${esc(c.password)}</td><td>${esc(getBranchName(c.branchId))}</td>
-      <td class="rp-row-actions">
+      <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openCashierModal('${c.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeCashier('${c.id}')" title="Hapus">${icon("trash",15)}</button>
-      </td></tr>`).join("");
+      </div></td></tr>`).join("");
   const fallbackNote = !cashiers.length ? emptyState("Belum ada akun kasir dibuat. Sementara, login kasir memakai akun bawaan (kasir / kasir123) yang terikat ke cabang pertama — tambahkan akun di bawah untuk memisahkan login tiap cabang.") : "";
   return `
     <div class="rp-ruled-head">Akun kasir per cabang</div>
@@ -3460,11 +3467,11 @@ function renderMember() {
       <td class="rp-mono">${m.visits||0}</td>
       <td class="rp-mono">${rupiah(m.totalSpent||0)}</td>
       <td>${fmtDateID(m.joined)}</td>
-      <td class="rp-row-actions">
+      <td class="rp-td-actions"><div class="rp-row-actions">
         ${m.phone ? `<button class="rp-icon-btn rp-icon-wa" onclick="chatMemberWhatsApp('${m.id}')" title="Chat WhatsApp">${iconWhatsApp(15)}</button>` : ""}
         <button class="rp-icon-btn" onclick="openMemberModal('${m.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeMember('${m.id}')" title="Hapus">${icon("trash",15)}</button>
-      </td>
+      </div></td>
     </tr>`).join("");
   return `
     <div class="rp-page">
@@ -3503,10 +3510,10 @@ function renderStok() {
       <td>${esc((state.units.find(u=>u.id===i.unitId)||{}).name || "-")}</td>
       <td><span class="rp-cond rp-cond-${i.condition.replace(" ","-")}">${esc(i.condition)}</span></td>
       <td>${fmtDateID(i.lastCheck)}</td>
-      <td class="rp-row-actions">
+      <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openInventoryModal('${i.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeInventory('${i.id}')" title="Hapus">${icon("trash",15)}</button>
-      </td>
+      </div></td>
     </tr>`).join("");
   return `
     <div class="rp-page">
@@ -3752,9 +3759,9 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   <div class="rp-ruled-head">Pengeluaran</div>
   <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openExpenseModal('')">${icon("plus",14)} Catat pengeluaran</button></div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th></th></tr></thead>
-  <tbody>${periodExpenses.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-row-actions">
+  <tbody>${periodExpenses.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-td-actions"><div class="rp-row-actions">
     <button class="rp-icon-btn" onclick="openExpenseModal('${e.id}')" title="Ubah">${icon("pencil",15)}</button>
-    <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>`;
+    <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>`;
 }
 
 function renderLaporan() {
