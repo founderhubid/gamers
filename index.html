@@ -1762,6 +1762,9 @@ function normalize(raw) {
 
   const transactions = (raw.Transactions || []).map(t => ({
     ...t, start: Number(t.start), end: Number(t.end),
+    // Transaksi lama (sebelum field ini ada) belum punya endTimeDisplay —
+    // fallback ke `end` (jam nyata ditutup) biar strukturnya tetap tampil.
+    endTimeDisplay: t.endTimeDisplay != null ? Number(t.endTimeDisplay) : Number(t.end),
     minutes: Number(t.minutes), amount: Number(t.amount)
   })).sort((a,b) => b.end - a.end);
 
@@ -2139,7 +2142,7 @@ function extendRental(unitId, addMinutes) {
   flash("Waktu sewa diperpanjang.");
 }
 
-function finishRental(unitId, payment, discount, frozenMs, promoName) {
+function finishRental(unitId, payment, discount, frozenMs, promoName, isFixed) {
   const session = state.activeRentals[unitId];
   const unit = state.units.find(u => u.id === unitId);
   if (!session || !unit) return;
@@ -2149,6 +2152,12 @@ function finishRental(unitId, payment, discount, frozenMs, promoName) {
   const subtotal = Math.round(rawAmount);
   const appliedDiscount = Math.max(0, Math.min(subtotal, Math.round(discount || 0)));
   const amount = Math.max(0, Math.round(rawAmount - (discount || 0)));
+  const now = Date.now();
+  // Jam selesai yang DITAMPILKAN di struk: untuk sewa paket durasi tetap
+  // (isFixed), pakai jam seharusnya selesai sesuai paket (start + durasi
+  // paket) — BUKAN jam nyata ditutup — walaupun kasir menutupnya lebih awal
+  // dari jadwal. Untuk sewa non-paket (argo jalan), pakai jam nyata sekarang.
+  const endTimeDisplay = isFixed ? (session.startTime + ms) : now;
 
   const trx = {
     id: uid(), unitId: unit.id, unitName: unit.name,
@@ -2163,7 +2172,9 @@ function finishRental(unitId, payment, discount, frozenMs, promoName) {
     // jatuh ke MASA DEPAN (tanggal paket seharusnya kelar), padahal
     // transaksinya beneran dicatat & dibayar hari ini. Ini yang bikin
     // transaksi "nyasar" ke tanggal yang salah di laporan/dashboard.
-    memberId: session.memberId || "", start: session.startTime, end: Date.now(),
+    // `endTimeDisplay` dipakai KHUSUS buat baris "Jam selesai" di struk
+    // (lihat catatan di atas soal endTimeDisplay).
+    memberId: session.memberId || "", start: session.startTime, end: now, endTimeDisplay,
     // subtotal/discount/promoName dicatat supaya rincian diskon ikut tampil
     // di struk (modal, WA, PDF, & cetak) — bukan cuma nilai akhir (amount).
     minutes, subtotal, discount: appliedDiscount, promoName: promoName || "",
@@ -2206,6 +2217,8 @@ function openReceiptModal(trx) {
       <div class="rp-receipt-line"></div>
       <div class="rp-receipt-row"><span>Penyewa</span><strong>${esc(trx.customerName)}</strong></div>
       <div class="rp-receipt-row"><span>Unit</span><strong>${esc(trx.unitName)}</strong></div>
+      <div class="rp-receipt-row"><span>Jam mulai</span><strong class="rp-mono">${fmtTimeID(trx.start)}</strong></div>
+      <div class="rp-receipt-row"><span>Jam selesai</span><strong class="rp-mono">${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}</strong></div>
       <div class="rp-receipt-row"><span>Durasi</span><strong class="rp-mono">${fmtHMS(trx.minutes * 60000)}</strong></div>
       <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
       ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
@@ -2251,6 +2264,8 @@ function buildReceiptWaMessage(trx) {
     `🏬 ${bizName}${trx.branchName ? ` — ${trx.branchName}` : ""}`,
     `📅 ${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`,
     `🎮 Unit: ${trx.unitName}`,
+    `🕐 Jam mulai: ${fmtTimeID(trx.start)}`,
+    `🕑 Jam selesai: ${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}`,
     `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
     `💳 Metode bayar: ${trx.payment}`,
     ...(trx.discount ? [
@@ -2281,6 +2296,8 @@ function receiptPdfRows(trx) {
     ["Tanggal", `${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`],
     ["Penyewa", trx.customerName],
     ["Unit", trx.unitName],
+    ["Jam mulai", fmtTimeID(trx.start)],
+    ["Jam selesai", fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)],
     ["Durasi", fmtHMS(trx.minutes * 60000)],
     ["Metode bayar", trx.payment],
   ];
@@ -3078,6 +3095,7 @@ function confirmFinish(unitId) {
   const promoSel = document.getElementById("finish-promo");
   const promo = promoSel && promoSel.value ? getPromo(promoSel.value) : null;
   const frozenMs = window._finishStop && window._finishStop.unitId === unitId ? window._finishStop.ms : null;
+  const isFixed = !!(window._finishStop && window._finishStop.unitId === unitId && window._finishStop.isFixed);
   const totalText = document.getElementById("finish-total")?.textContent || "";
   openConfirmModal({
     title: "Tutup transaksi ini?",
@@ -3085,7 +3103,7 @@ function confirmFinish(unitId) {
     confirmLabel: "Ya, selesaikan",
     icon: "check",
     onConfirm: () => {
-      finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "");
+      finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "", isFixed);
       window._finishStop = null;
     },
   });
@@ -3825,6 +3843,7 @@ function renderRiwayat() {
 function exportRiwayatCSV() {
   downloadXLSX("riwayat-sewa.xlsx", state.transactions.map(t => ({
     Tanggal: fmtDateID(t.end), Jam: fmtTimeID(t.end), Cabang: t.branchName || getBranchName(t.branchId), Unit: t.unitName, Penyewa: t.customerName,
+    "Jam mulai": fmtTimeID(t.start), "Jam selesai": fmtTimeID(t.endTimeDisplay != null ? t.endTimeDisplay : t.end),
     "Durasi (menit)": t.minutes, "Subtotal (Rp)": receiptSubtotal(t), Promo: t.promoName || "", "Diskon (Rp)": t.discount || 0,
     "Total (Rp)": t.amount, Pembayaran: t.payment, Catatan: t.note || "",
   })), "Riwayat Sewa");
