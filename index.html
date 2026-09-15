@@ -255,15 +255,21 @@
   .rp-table-wrap { overflow-x: auto; border: 1px solid var(--rp-border); border-radius: 10px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow); }
   .rp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .rp-table th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--rp-ink-dim); padding: 10px 14px; border-bottom: 1px solid var(--rp-border); background: var(--rp-th-bg); white-space: nowrap; }
-  .rp-table td { padding: 10px 14px; border-bottom: 1px solid var(--rp-border); color: var(--rp-ink); }
+  .rp-table td { padding: 10px 14px; border-bottom: 1px solid var(--rp-border); color: var(--rp-ink); vertical-align: middle; }
   .rp-table tr:last-child td { border-bottom: none; }
+  /* Kolom nomor urut dibikin sesempit isinya (bukan ikut lebar kolom lain) */
+  .rp-table th.rp-th-no, .rp-table td.rp-td-no { width: 1%; white-space: nowrap; text-align: center; padding-left: 10px; padding-right: 10px; }
+  /* Kolom aksi: ikon selalu serata tengah vertikal & sejajar dalam satu baris,
+     nggak peduli kolom lain di baris itu tinggi (misal tanggal 2 baris) */
+  .rp-row-actions { display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px; }
   .rp-dim { color: var(--rp-ink-dim); font-size: 11px; }
-  .rp-row-actions { display: flex; gap: 4px; }
 
   .rp-icon-btn { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px; cursor: pointer; color: var(--rp-ink-dim); display: inline-flex; }
   .rp-icon-btn:hover { background: var(--rp-hover-tint); color: var(--rp-ink); }
   .rp-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .rp-icon-danger:hover { color: var(--rp-red); }
+  .rp-icon-wa { color: #25D366; }
+  .rp-icon-wa:hover { background: rgba(37,211,102,0.14); color: #1DA851; }
 
   .rp-cond { font-size: 12px; padding: 2px 8px; border-radius: 20px; }
   .rp-cond-Baik { color: var(--rp-teal); background: var(--rp-teal-tint); }
@@ -527,7 +533,7 @@ body:before{
   .rp-quickrail {
     display: flex; flex-direction: column; width: 58px; flex-shrink: 0;
     background: var(--rp-sidebar-bg); border-right: 1px solid var(--rp-border);
-    align-items: center; padding: 14px 6px; gap: 5px;
+    align-items: center; padding: 14px 6px; gap: 9px;
     position: sticky; top: 0; height: 100vh; overflow-y: auto;
   }
   .rp-quickrail-brand {
@@ -549,13 +555,37 @@ body:before{
     color: var(--rp-ink-dim); text-align: center; margin-top: 6px;
   }
   .rp-quickrail-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    width: 100%; padding: 8px 2px; border: none; border-radius: 8px;
-    background: transparent; color: var(--rp-ink); cursor: pointer;
-    font-family: var(--rp-sans); font-size: 8.5px; font-weight: 600; text-align: center;
-    line-height: 1.1; transition: background .12s ease;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; padding: 0; border: none; border-radius: 8px;
+    background: transparent; cursor: pointer; font-family: var(--rp-sans);
+    color: var(--rp-ink);
   }
-  .rp-quickrail-btn:hover { background: var(--rp-hover-tint); }
+  /* Bulatan ikon — bentuknya sama kayak "akses cepat" versi HP
+     (.rp-btn-circle di media query mobile), cuma dipakai di sini scoped
+     ke .rp-quickrail-btn karena breakpoint-nya beda (desktop vs mobile
+     nggak akan pernah aktif bebarengan, jadi aman pakai nama class sama). */
+  .rp-quickrail-btn .rp-btn-circle {
+    width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding-bottom: 10px;
+    background: var(--rp-surface-solid); border: 1px solid var(--rp-border-strong);
+    box-shadow: 0 8px 18px -10px var(--rp-elevation-shadow);
+    transition: background .12s ease;
+  }
+  .rp-quickrail-btn:hover .rp-btn-circle { background: var(--rp-hover-tint); }
+  .rp-quickrail-btn .rp-btn-circle svg { width: 15px; height: 15px; flex-shrink: 0; }
+  /* Teks ditumpuk di dalam bulatan (bagian bawah), persis posisi label di
+     tombol bulat HP — bukan buka/tutup apa pun, selalu tampil begini. */
+  .rp-quickrail-btn .rp-btn-label {
+    position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
+    display: block; font-size: 0; font-weight: 600; line-height: 1;
+    color: var(--rp-ink); text-align: center; max-width: 38px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  }
+  .rp-quickrail-btn .rp-btn-label:after {
+    content: attr(data-short); font-size: 7px; line-height: 1; letter-spacing: .01em;
+  }
 
   /* Jarak judul ke atas dipepetin. */
   .rp-main { padding-top: 20px; padding-bottom: 64px; padding-left: 28px; padding-right: 28px; height: 100vh; overflow-y: auto; }
@@ -1399,6 +1429,29 @@ const ICONS = {
   wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/><path d="M18 13h.01"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
 };
+// Logo WhatsApp asli pakai fill (bukan stroke) biar bentuknya kebaca —
+// makanya dirender lewat fungsi terpisah ini, bukan lewat icon() biasa
+// yang semua glyph-nya outline/stroke.
+function iconWhatsApp(size) {
+  size = size || 15;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="currentColor" style="flex-shrink:0"><path d="M16.02 3C9.4 3 4 8.4 4 15.02c0 2.22.6 4.32 1.65 6.12L3 29l8.06-2.6a12.9 12.9 0 0 0 4.96.98h.01c6.62 0 12.02-5.4 12.02-12.02C28 8.4 22.63 3 16.02 3Zm0 21.98h-.01a10 10 0 0 1-4.98-1.33l-.36-.21-4.36 1.4 1.42-4.16-.23-.36a9.87 9.87 0 0 1-1.53-5.3c0-5.5 4.48-9.98 9.99-9.98 2.67 0 5.17 1.04 7.06 2.93a9.9 9.9 0 0 1 2.92 7.06c0 5.5-4.48 9.95-9.92 9.95Zm5.47-7.45c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.65-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.62.71.23 1.36.2 1.87.12.57-.08 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>`;
+}
+// Bikin nomor HP jadi format internasional (62...) buat link wa.me, dan
+// buka tab WhatsApp baru berisi pesan siap kirim.
+function normalizePhoneID(phone) {
+  let p = String(phone || "").replace(/[^0-9+]/g, "");
+  p = p.replace(/^\+/, "");
+  if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (!p.startsWith("62")) p = "62" + p;
+  return p;
+}
+function openWhatsApp(phone, message) {
+  const clean = normalizePhoneID(phone);
+  if (!clean || clean.length < 8) { flash("No. HP pelanggan belum diisi/valid untuk chat WhatsApp."); return; }
+  const url = `https://wa.me/${clean}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
+  window.open(url, "_blank");
+}
 function getTheme() {
   // Default di sini HARUS sama dengan default di script bootstrap paling
   // awal (early-theme script di <head>), yaitu "light". Sebelumnya beda
@@ -2080,6 +2133,8 @@ function finishRental(unitId, payment, discount, frozenMs) {
 // buat langsung nyimpen dia ke daftar pelanggan tanpa harus buka menu lain.
 function openReceiptModal(trx) {
   const isGuest = !trx.memberId;
+  const member = trx.memberId ? state.members.find(m => m.id === trx.memberId) : null;
+  const knownPhone = (member && member.phone) || "";
   openModal(modalShell(`Struk pembayaran`, `
     <div class="rp-receipt">
       <div class="rp-receipt-row"><span>${esc(state.settings.businessName)}</span><span>${esc(trx.branchName || "")}</span></div>
@@ -2098,11 +2153,52 @@ function openReceiptModal(trx) {
       <label class="rp-field"><span>No. HP</span><input id="receipt-guest-phone" placeholder="08xxxxxxxxxx" /></label>
       <button class="rp-btn rp-btn-ghost" style="width:100%" onclick="saveNewCustomerFromReceipt('${trx.id}')">${icon("users", 14)} Simpan sebagai pelanggan baru</button>
     ` : ""}</div>
+    <div class="rp-ruled-head" style="margin-top:14px;">Kirim struk ke pelanggan</div>
+    <label class="rp-field"><span>No. HP WhatsApp</span><input id="receipt-wa-phone" value="${esc(knownPhone)}" placeholder="08xxxxxxxxxx" /></label>
+    <button class="rp-btn rp-btn-ghost" style="width:100%;border-color:#25D366;color:#128C4A;" onclick="sendReceiptWhatsApp('${trx.id}')">${iconWhatsApp(15)} Kirim struk via WhatsApp</button>
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="printReceipt('${trx.id}')">${icon("printer", 14)} Cetak</button>
       <button class="rp-btn rp-btn-start" style="flex:1" onclick="closeModal()">Selesai</button>
     </div>
   `));
+}
+// Susun pesan struk yang dikirim via WA: nadanya rendah hati/humble buat
+// ucapan terima kasih, ditutup dengan up-selling halus (ajakan booking lagi/
+// promo) — tujuannya relationship selling, bukan struk kaku doang.
+function buildReceiptWaMessage(trx) {
+  const bizName = state.settings.businessName || "Kami";
+  const firstName = String(trx.customerName || "Kak").trim().split(/\s+/)[0] || "Kak";
+  const upsellLines = [
+    `Kalau mau main lagi lain waktu, kabari saja kami ya — kami bantu bookingkan unit favoritmu supaya nggak perlu antre 🎮`,
+    `Ajak teman atau saudara sekalian main bareng, makin rame makin seru! 😊`,
+  ];
+  const upsell = upsellLines[Math.floor(Math.random() * upsellLines.length)];
+  return [
+    `Halo Kak ${firstName} 🙏`,
+    ``,
+    `Terima kasih banyak sudah main di *${bizName}*. Berikut struk pembayarannya ya:`,
+    ``,
+    `🏬 ${bizName}${trx.branchName ? ` — ${trx.branchName}` : ""}`,
+    `📅 ${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`,
+    `🎮 Unit: ${trx.unitName}`,
+    `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
+    `💳 Metode bayar: ${trx.payment}`,
+    `💰 Total: ${rupiah(trx.amount)}`,
+    ``,
+    `Mohon maaf kalau ada kekurangan pelayanan dari kami hari ini 🙏 Masukan dari Kakak selalu kami tunggu supaya bisa lebih baik lagi ke depannya.`,
+    ``,
+    upsell,
+    ``,
+    `Sampai jumpa lagi, Kak! 🙌`,
+  ].join("\n");
+}
+function sendReceiptWhatsApp(trxId) {
+  const trx = state.transactions.find(t => t.id === trxId);
+  if (!trx) return;
+  const phoneInput = document.getElementById("receipt-wa-phone");
+  const phone = (phoneInput?.value || "").trim();
+  if (!phone) { flash("Isi dulu No. HP WhatsApp pelanggan untuk kirim struk."); return; }
+  openWhatsApp(phone, buildReceiptWaMessage(trx));
 }
 // Cetak dibikin lewat window terpisah (bukan window.print() langsung di
 // halaman utama) supaya hasil print cuma struknya doang — gak ikut kebawa
@@ -2293,10 +2389,11 @@ function openQueueModal(prefUnitId) {
   const unitOptions = `<option value="">Unit apapun (fleksibel)</option>` + visibleUnits.map(u => `<option value="${u.id}" ${prefUnitId===u.id?"selected":""}>${esc(u.name)}</option>`).join("");
   const availableUnits = visibleUnits.filter(u => u.status === "available");
   const branchQueue = getVisibleQueue();
-  const rows = branchQueue.map(q => {
+  const rows = branchQueue.map((q, i) => {
     const unitName = q.unitId ? ((state.units.find(u => u.id === q.unitId) || {}).name || "-") : "Unit apapun";
     const assignOptions = availableUnits.map(u => `<option value="${u.id}" ${u.id===q.unitId?"selected":""}>${esc(u.name)}</option>`).join("");
     return `<tr>
+      <td class="rp-mono rp-td-no">${i+1}</td>
       <td>${esc(q.customerName)}${q.note ? `<div class="rp-dim">${esc(q.note)}</div>` : ""}</td>
       <td>${esc(q.phone || "-")}</td>
       <td>${esc(unitName)}</td>
@@ -2317,8 +2414,8 @@ function openQueueModal(prefUnitId) {
     <button class="rp-btn rp-btn-start" onclick="submitQueue()">${icon("plus",14)} Tambahkan ke antrian</button>
     <div class="rp-ruled-head">Daftar antrian (${branchQueue.length})</div>
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Nama</th><th>HP</th><th>Unit diminta</th><th>Waktu</th><th></th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="5">${emptyState("Belum ada antrian.")}</td></tr>`}</tbody>
+      <thead><tr><th class="rp-th-no">No</th><th>Nama</th><th>HP</th><th>Unit diminta</th><th>Waktu</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada antrian.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -2330,25 +2427,25 @@ function openDashTxModal() {
   const todayStr = nowJakarta().toDateString();
   const todayTx = getVisibleTransactions().filter(t => toJakarta(t.end).toDateString() === todayStr);
   const total = todayTx.reduce((a,t) => a+t.amount, 0);
-  const rows = todayTx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const rows = todayTx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell("Transaksi hari ini", `
     <p class="rp-sub">${todayTx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada transaksi hari ini.")}</td></tr>`}</tbody>
+      <thead><tr><th class="rp-th-no">No</th><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada transaksi hari ini.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
 function openDashActiveUnitsModal() {
-  const rows = getVisibleUnits().filter(u => u.status === "active" && state.activeRentals[u.id]).map(u => {
+  const rows = getVisibleUnits().filter(u => u.status === "active" && state.activeRentals[u.id]).map((u, i) => {
     const s = state.activeRentals[u.id];
     const elapsed = Date.now() - s.startTime;
-    return `<tr><td>${esc(u.name)}</td><td>${esc(s.customerName)}</td><td class="rp-mono">${fmtHMS(elapsed)}</td><td>${esc(s.note || "-")}</td></tr>`;
+    return `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(u.name)}</td><td>${esc(s.customerName)}</td><td class="rp-mono">${fmtHMS(elapsed)}</td><td>${esc(s.note || "-")}</td></tr>`;
   }).join("");
   openModal(modalShell("Unit sedang disewa", `
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Unit</th><th>Penyewa</th><th>Berjalan</th><th>Catatan</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="4">${emptyState("Tidak ada unit yang sedang disewa.")}</td></tr>`}</tbody>
+      <thead><tr><th class="rp-th-no">No</th><th>Unit</th><th>Penyewa</th><th>Berjalan</th><th>Catatan</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5">${emptyState("Tidak ada unit yang sedang disewa.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -2409,15 +2506,15 @@ function openLaporanDetailModal(type) {
       byUnitMap[key].minutes += t.minutes;
       byUnitMap[key].count += 1;
     });
-    colCount = showBranchCol ? 4 : 3;
-    theadRow = `<tr>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th></tr>`;
+    colCount = showBranchCol ? 5 : 4;
+    theadRow = `<tr><th class="rp-th-no">No</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th></tr>`;
     bodyRows = Object.entries(byUnitMap).sort((a,b) => b[1].minutes - a[1].minutes)
-      .map(([,d]) => `<tr>${showBranchCol?`<td>${esc(d.branchName)}</td>`:""}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
+      .map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:""}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
   } else {
     title = type === "revenue" ? "Rincian pendapatan" : type === "count" ? "Rincian jumlah sewa" : "Rincian rata-rata per sewa";
-    colCount = showBranchCol ? 6 : 5;
-    theadRow = `<tr><th>Tanggal</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr>`;
-    bodyRows = tx.map(t => `<tr><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:""}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+    colCount = showBranchCol ? 7 : 6;
+    theadRow = `<tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr>`;
+    bodyRows = tx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:""}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   }
   openModal(modalShell(title, `
     <p class="rp-sub">${esc(periodLbl)}</p>
@@ -2451,12 +2548,12 @@ function openTrendPointModal(period, startMs, index) {
   }
   const tx = state.transactions.filter(t => { const jt = toJakarta(t.end).getTime(); return jt >= rangeStart && jt <= rangeEnd; });
   const total = tx.reduce((a,t) => a+t.amount, 0);
-  const rows = tx.map(t => `<tr><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const rows = tx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell(`Rincian — ${label}`, `
     <p class="rp-sub">${tx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
-      <thead><tr><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6">${emptyState("Tidak ada transaksi pada tanggal ini.")}</td></tr>`}</tbody>
+      <thead><tr><th class="rp-th-no">No</th><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7">${emptyState("Tidak ada transaksi pada tanggal ini.")}</td></tr>`}</tbody>
     </table></div>
   `));
 }
@@ -2965,10 +3062,10 @@ function renderAll() {
     <aside class="rp-quickrail${enter}">
       <div class="rp-quickrail-brand" title="${esc(state.settings.businessName)} — klik buat ganti nama" onclick="openBrandRenameModal()">${esc(getInitials(state.settings.businessName))}</div>
       <div class="rp-quickrail-name" title="${esc(state.settings.businessName)} — klik buat ganti nama" onclick="openBrandRenameModal()">${esc(state.settings.businessName)}</div>
-      <button class="rp-quickrail-btn" onclick="quickStartRental()">${icon("play",18)}<span>Mulai sewa</span></button>
-      <button class="rp-quickrail-btn" onclick="openQueueModal()">${icon("users",18)}<span>Antrian</span></button>
-      <button class="rp-quickrail-btn" onclick="openMemberModal('')">${icon("user-plus",18)}<span>Pelanggan</span></button>
-      ${isAdmin() ? `<button class="rp-quickrail-btn" onclick="openExpenseModal('')">${icon("wallet",18)}<span>Pengeluaran</span></button>` : ""}
+      <button class="rp-quickrail-btn" title="Mulai sewa" onclick="quickStartRental()"><span class="rp-btn-circle">${icon("play",16)}</span><span class="rp-btn-label" data-short="Sewa">Mulai sewa</span></button>
+      <button class="rp-quickrail-btn" title="Antrian" onclick="openQueueModal()"><span class="rp-btn-circle">${icon("users",16)}</span><span class="rp-btn-label" data-short="Antrian">Antrian</span></button>
+      <button class="rp-quickrail-btn" title="Pelanggan" onclick="openMemberModal('')"><span class="rp-btn-circle">${icon("user-plus",16)}</span><span class="rp-btn-label" data-short="Member">Pelanggan</span></button>
+      ${isAdmin() ? `<button class="rp-quickrail-btn" title="Pengeluaran" onclick="openExpenseModal('')"><span class="rp-btn-circle">${icon("wallet",16)}</span><span class="rp-btn-label" data-short="Biaya">Pengeluaran</span></button>` : ""}
       <div class="rp-quickrail-title">Aksi cepat</div>
     </aside>
     <aside class="rp-sidebar${enter}">
@@ -3175,16 +3272,16 @@ async function submitBranch(id){
 function renderUnits() {
   const branch = getBranchName(ensureSelectedBranch());
   const visibleUnits = getVisibleUnits();
-  const rows = visibleUnits.map(u => `
-    <tr><td>${esc(u.name)}</td><td>${esc(u.branchName || branch)}</td><td class="rp-mono">${rupiah(u.rate)}</td>
+  const rows = visibleUnits.map((u, i) => `
+    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(u.name)}</td><td>${esc(u.branchName || branch)}</td><td class="rp-mono">${rupiah(u.rate)}</td>
       <td><span class="rp-stamp rp-stamp-${u.status} rp-stamp-inline">${u.status==="available"?"Kosong":u.status==="active"?"Disewa":"Servis"}</span></td>
       <td class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openUnitModal('${u.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn" onclick="toggleMaint('${u.id}')" ${u.status==="active"?"disabled":""} title="Servis">${icon("wrench",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeUnit('${u.id}')" ${state.activeRentals[u.id]?"disabled":""} title="Hapus">${icon("trash",15)}</button>
       </td></tr>`).join("");
-  const branchRows = getBranches().map(b => `
-    <tr><td>${esc(b.name)}</td><td class="rp-mono">${state.units.filter(u=>u.branchId===b.id).length}</td>
+  const branchRows = getBranches().map((b, i) => `
+    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(b.name)}</td><td class="rp-mono">${state.units.filter(u=>u.branchId===b.id).length}</td>
       <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openBranchModal('${b.id}')" title="Ubah">${icon("pencil",15)}</button>
       <button class="rp-icon-btn rp-icon-danger" onclick="removeBranch('${b.id}')" title="Hapus">${icon("trash",15)}</button></td></tr>`).join("");
   return `<div class="rp-page">
@@ -3197,9 +3294,9 @@ function renderUnits() {
     })}
     <div class="rp-branch-bar">${branchSwitcherLabel()}
     <span class="rp-branch-tag">${visibleUnits.length} unit di cabang ini</span></div>
-    <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Unit</th><th>Cabang</th><th>Tarif/jam</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows||`<tr><td colspan="5">${emptyState("Belum ada unit pada cabang ini.")}</td></tr>`}</tbody></table></div>
-    ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>`:""}
+    <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Unit</th><th>Cabang</th><th>Tarif/jam</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="6">${emptyState("Belum ada unit pada cabang ini.")}</td></tr>`}</tbody></table></div>
+    ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>`:""}
     ${isAdmin()?renderCashierSection():""}
     ${isAdmin()?renderAdminSection():""}
   </div>`;
@@ -3210,8 +3307,8 @@ function renderAdminSection(){
   return `
     <div class="rp-ruled-head">Akun admin</div>
     <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Username &amp; password untuk login sebagai Administrator (akses penuh, semua cabang).</p>
-    <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Username</th><th>Password</th><th></th></tr></thead>
-      <tbody><tr><td>${esc(admin.username)}</td><td class="rp-mono">${esc(admin.password)}</td>
+    <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Username</th><th>Password</th><th></th></tr></thead>
+      <tbody><tr><td class="rp-mono rp-td-no">1</td><td>${esc(admin.username)}</td><td class="rp-mono">${esc(admin.password)}</td>
         <td class="rp-row-actions"><button class="rp-icon-btn" onclick="openAdminModal()" title="Ubah">${icon("pencil",15)}</button></td>
       </tr></tbody></table></div>
   `;
@@ -3247,8 +3344,8 @@ function submitAdminAccount(){
 /* --------------------- Akun kasir per cabang --------------------- */
 function renderCashierSection(){
   const cashiers = getCashiers();
-  const rows = cashiers.map(c => `
-    <tr><td>${esc(c.username)}</td><td class="rp-mono">${esc(c.password)}</td><td>${esc(getBranchName(c.branchId))}</td>
+  const rows = cashiers.map((c, i) => `
+    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(c.username)}</td><td class="rp-mono">${esc(c.password)}</td><td>${esc(getBranchName(c.branchId))}</td>
       <td class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openCashierModal('${c.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeCashier('${c.id}')" title="Hapus">${icon("trash",15)}</button>
@@ -3259,7 +3356,7 @@ function renderCashierSection(){
     <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Setiap akun kasir hanya bisa login dan melihat data cabang yang dipilih di sini.</p>
     <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openCashierModal('')">${icon("plus",14)} Tambah akun kasir</button></div>
     ${fallbackNote}
-    ${cashiers.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Username</th><th>Password</th><th>Cabang</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    ${cashiers.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Username</th><th>Password</th><th>Cabang</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
   `;
 }
 function openCashierModal(id){
@@ -3303,8 +3400,9 @@ function removeCashier(id){
 function renderRiwayat() {
   const visibleTx = getVisibleTransactions();
   const total = visibleTx.reduce((a,t)=>a+t.amount,0);
-  const rows = visibleTx.map(t => `
+  const rows = visibleTx.map((t, i) => `
     <tr data-name="${esc((t.unitName+" "+t.customerName).toLowerCase())}">
+      <td class="rp-mono rp-td-no">${i+1}</td>
       <td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>
       <td>${esc(t.branchName || getBranchName(t.branchId))}</td>
       <td>${esc(t.unitName)}</td>
@@ -3324,8 +3422,8 @@ function renderRiwayat() {
           <button class="rp-btn rp-btn-ghost" onclick="exportRiwayatCSV()" ${!state.transactions.length?"disabled":""}>${icon("download",14)} Ekspor Excel</button>`
       })}
       <div class="rp-table-wrap"><table class="rp-table" id="riwayat-table">
-        <thead><tr><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
+        <thead><tr><th class="rp-th-no">No</th><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
@@ -3338,14 +3436,16 @@ function exportRiwayatCSV() {
 
 /* --------------------- Member --------------------- */
 function renderMember() {
-  const rows = state.members.map(m => `
+  const rows = state.members.map((m, i) => `
     <tr data-name="${esc(m.name.toLowerCase())}">
+      <td class="rp-mono rp-td-no">${i+1}</td>
       <td>${esc(m.name)}</td>
       <td class="rp-mono">${esc(m.phone||"-")}</td>
       <td class="rp-mono">${m.visits||0}</td>
       <td class="rp-mono">${rupiah(m.totalSpent||0)}</td>
       <td>${fmtDateID(m.joined)}</td>
       <td class="rp-row-actions">
+        ${m.phone ? `<button class="rp-icon-btn rp-icon-wa" onclick="chatMemberWhatsApp('${m.id}')" title="Chat WhatsApp">${iconWhatsApp(15)}</button>` : ""}
         <button class="rp-icon-btn" onclick="openMemberModal('${m.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeMember('${m.id}')" title="Hapus">${icon("trash",15)}</button>
       </td>
@@ -3360,16 +3460,27 @@ function renderMember() {
       })}
       <div class="rp-search rp-search-wide">${icon("search",14)}<input id="member-search" placeholder="Cari nama pelanggan…" /></div>
       <div class="rp-table-wrap"><table class="rp-table" id="member-table">
-        <thead><tr><th>Nama</th><th>No. HP</th><th>Kunjungan</th><th>Total belanja</th><th>Sejak</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada pelanggan tercatat.")}</td></tr>`}</tbody>
+        <thead><tr><th class="rp-th-no">No</th><th>Nama</th><th>No. HP</th><th>Kunjungan</th><th>Total belanja</th><th>Sejak</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada pelanggan tercatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
+}
+// Chat "relationship selling" ke pelanggan tetap — sapaan hangat + ajakan
+// balik main, biar hubungan sama pelanggan tetap kejaga di luar transaksi.
+function chatMemberWhatsApp(memberId) {
+  const m = state.members.find(x => x.id === memberId);
+  if (!m) return;
+  const bizName = state.settings.businessName || "kami";
+  const firstName = String(m.name || "").trim().split(/\s+/)[0] || m.name;
+  const msg = `Halo Kak ${firstName} 🙏\n\nPerkenalkan, kami dari ${bizName}. Terima kasih banyak sudah pernah main ke tempat kami sebelumnya 🎮\n\nKalau Kakak lagi cari waktu buat main PS santai bareng teman atau keluarga, unit kami selalu siap ya. Kabari saja kalau mau booking, nanti kami bantu siapkan.\n\nDitunggu kedatangannya lagi, Kak! 🙌`;
+  openWhatsApp(m.phone, msg);
 }
 
 /* --------------------- Stok & Servis --------------------- */
 function renderStok() {
-  const rows = state.inventory.filter(i => !i.unitId || getVisibleUnits().some(u=>u.id===i.unitId)).map(i => `
+  const rows = state.inventory.filter(i => !i.unitId || getVisibleUnits().some(u=>u.id===i.unitId)).map((i, idx) => `
     <tr>
+      <td class="rp-mono rp-td-no">${idx+1}</td>
       <td>${i.photoUrl ? `<img src="${esc(i.photoUrl)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;display:block;" />` : `<div style="width:36px;height:36px;border-radius:6px;background:var(--rp-input-bg);border:1px dashed var(--rp-border-strong);"></div>`}</td>
       <td>${esc(i.name)}</td>
       <td>${esc(i.category)}</td>
@@ -3390,8 +3501,8 @@ function renderStok() {
         tools: `<button class="rp-btn rp-btn-start" onclick="openInventoryModal('')">${icon("plus",14)} Tambah item</button>`
       })}
       <div class="rp-table-wrap"><table class="rp-table">
-        <thead><tr><th>Foto</th><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
+        <thead><tr><th class="rp-th-no">No</th><th>Foto</th><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
@@ -3567,8 +3678,8 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   const profitMarginPct = totalRevenue > 0 ? (netProfit/totalRevenue*100) : 0;
   window._labaRugiExport = {periodTx,periodExpenses,totalRevenue,totalExpense,netProfit,profitMarginPct};
   const sortedRevenueTx = periodTx.slice().sort((a,b)=>toJakarta(b.end).getTime()-toJakarta(a.end).getTime());
-  const revenueColCount = showBranchCol ? 7 : 6;
-  const expenseColCount = showBranchCol ? 6 : 5;
+  const revenueColCount = showBranchCol ? 8 : 7;
+  const expenseColCount = showBranchCol ? 7 : 6;
   return `<div class="rp-stat-row">
     <div class="rp-stat-card"><span class="rp-stat-label">Total pendapatan</span><strong class="rp-mono rp-stat-value">${rupiah(totalRevenue)}</strong></div>
     <div class="rp-stat-card"><span class="rp-stat-label">Total pengeluaran</span><strong class="rp-mono rp-stat-value">${rupiah(totalExpense)}</strong></div>
@@ -3576,12 +3687,12 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
     <div class="rp-stat-card"><span class="rp-stat-label">% Laba / rugi</span><strong class="rp-mono rp-stat-value" style="color:${netProfit>=0?'var(--rp-teal)':'var(--rp-red)'}">${netProfit>=0?'+':'-'}${Math.abs(profitMarginPct).toFixed(1)}%</strong></div>
   </div>
   <div class="rp-ruled-head">Detail pendapatan</div>
-  <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
-  <tbody>${sortedRevenueTx.map(t=>`<tr><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
+  <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
+  <tbody>${sortedRevenueTx.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
   <div class="rp-ruled-head">Pengeluaran</div>
   <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openExpenseModal('')">${icon("plus",14)} Catat pengeluaran</button></div>
-  <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th></th></tr></thead>
-  <tbody>${periodExpenses.map(e=>`<tr><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-row-actions">
+  <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th></th></tr></thead>
+  <tbody>${periodExpenses.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-row-actions">
     <button class="rp-icon-btn" onclick="openExpenseModal('${e.id}')" title="Ubah">${icon("pencil",15)}</button>
     <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>`;
 }
@@ -3703,15 +3814,15 @@ function renderLaporan() {
       <div class="rp-ruled-head">Rincian per unit</div>
       ${byUnit.length===0 ? emptyState('Belum ada data pendapatan pada bulan terpilih.') : `
         <div class="rp-table-wrap"><table class="rp-table">
-          <thead><tr>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th><th>Total pendapatan</th><th>Rata-rata/sewa</th></tr></thead>
-          <tbody>${byUnit.map(([,d]) => `<tr>${showBranchCol?`<td>${esc(d.branchName)}</td>`:''}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
+          <thead><tr><th class="rp-th-no">No</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th><th>Total pendapatan</th><th>Rata-rata/sewa</th></tr></thead>
+          <tbody>${byUnit.map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:''}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
         </table></div>`}
 
       <div class="rp-ruled-head">Metode pembayaran</div>
       ${byPayment.length===0 ? emptyState('Belum ada data pembayaran pada bulan terpilih.') : `
         <div class="rp-table-wrap"><table class="rp-table">
-          <thead><tr><th>Metode</th><th>Jumlah transaksi</th><th>Total nominal</th></tr></thead>
-          <tbody>${byPayment.map(([name,d]) => `<tr><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${rupiah(d.total)}</td></tr>`).join('')}</tbody>
+          <thead><tr><th class="rp-th-no">No</th><th>Metode</th><th>Jumlah transaksi</th><th>Total nominal</th></tr></thead>
+          <tbody>${byPayment.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${rupiah(d.total)}</td></tr>`).join('')}</tbody>
         </table></div>`}
     </div>`;
 }
