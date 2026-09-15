@@ -1365,6 +1365,22 @@ async function uploadToCloudinary(file) {
 ========================================================= */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const rupiah = (n) => "Rp" + Math.round(n || 0).toLocaleString("id-ID");
+// Versi ringkas buat label chart di layar sempit (HP) — "Rp1,2jt" alih-alih
+// "Rp1.200.000" — supaya sumbu/label chart batang tidak makan tempat.
+function rupiahCompact(n) {
+  const v = Math.round(n || 0);
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  const fmt = (num, suf) => {
+    const rounded = Math.round(num * 10) / 10;
+    const str = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1).replace(".", ",");
+    return sign + "Rp" + str + suf;
+  };
+  if (abs >= 1000000000) return fmt(abs / 1000000000, "M");
+  if (abs >= 1000000) return fmt(abs / 1000000, "jt");
+  if (abs >= 1000) return fmt(abs / 1000, "rb");
+  return rupiah(v);
+}
 const pad2 = (n) => String(n).padStart(2, "0");
 function fmtHMS(ms) {
   const t = Math.max(0, Math.floor(ms / 1000));
@@ -3680,12 +3696,56 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   const sortedRevenueTx = periodTx.slice().sort((a,b)=>toJakarta(b.end).getTime()-toJakarta(a.end).getTime());
   const revenueColCount = showBranchCol ? 8 : 7;
   const expenseColCount = showBranchCol ? 7 : 6;
+
+  // ---- Data untuk chart investor-grade ----
+  const trendData = buildLabaRugiDailyTrend(start, periodTx, periodExpenses);
+  const expenseCategories = buildExpenseCategoryBreakdown(periodExpenses);
+  const prevRange = getPrevMonthRange(start);
+  const prevTotals = computeLabaRugiTotalsForRange(prevRange.start, prevRange.end, bid);
+  const currentMonthLabel = start.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const branchData = showBranchCol ? buildBranchProfitBreakdown(periodTx, periodExpenses) : [];
+
+  const chartsHtml = `
+  <div class="rp-ruled-head">Tren harian: pendapatan vs pengeluaran vs laba bersih</div>
+  <div class="rp-chart-box">
+    ${svgLabaRugiTrendChart(trendData.labels, trendData.revenuePerDay, trendData.expensePerDay, trendData.profitPerDay)}
+    <div class="rp-chart-legend">
+      <span class="rp-legend-item"><span class="rp-legend-swatch" style="background:var(--rp-navy)"></span>Pendapatan</span>
+      <span class="rp-legend-item"><span class="rp-legend-swatch" style="background:var(--rp-red)"></span>Pengeluaran</span>
+      <span class="rp-legend-item"><span class="rp-legend-swatch" style="background:var(--rp-teal);border-radius:0;height:2px;align-self:center;"></span>Laba bersih</span>
+    </div>
+  </div>
+
+  <div class="rp-ruled-head">Struktur profitabilitas — dari pendapatan ke laba bersih</div>
+  <div class="rp-chart-box">
+    ${totalRevenue > 0 ? svgWaterfallChart(totalRevenue, expenseCategories, netProfit) : emptyState('Belum ada pendapatan pada periode ini.')}
+  </div>
+
+  <div class="rp-ruled-head">Komposisi pengeluaran per kategori</div>
+  <div class="rp-chart-box">
+    ${expenseCategories.length ? svgExpenseDonutChart(expenseCategories, totalExpense) : emptyState('Belum ada pengeluaran pada periode ini.')}
+  </div>
+
+  <div class="rp-ruled-head">Pendapatan, pengeluaran &amp; laba — ${esc(currentMonthLabel)} vs ${esc(prevRange.label)}</div>
+  <div class="rp-chart-box">
+    ${svgMoMBarChart({totalRevenue,totalExpense,netProfit}, prevTotals, currentMonthLabel, prevRange.label)}
+    <div class="rp-chart-legend">
+      <span class="rp-legend-item"><span class="rp-legend-swatch" style="background:var(--rp-navy)"></span>${esc(currentMonthLabel)} (bulan ini)</span>
+      <span class="rp-legend-item"><span class="rp-legend-swatch" style="background:var(--rp-ink-dim);opacity:.55"></span>${esc(prevRange.label)} (bulan lalu)</span>
+    </div>
+  </div>
+  ${branchData.length > 1 ? `
+  <div class="rp-ruled-head">Kontribusi laba per cabang</div>
+  <div class="rp-chart-box">${svgBranchProfitBarChart(branchData)}</div>` : ''}
+  `;
+
   return `<div class="rp-stat-row">
     <div class="rp-stat-card"><span class="rp-stat-label">Total pendapatan</span><strong class="rp-mono rp-stat-value">${rupiah(totalRevenue)}</strong></div>
     <div class="rp-stat-card"><span class="rp-stat-label">Total pengeluaran</span><strong class="rp-mono rp-stat-value">${rupiah(totalExpense)}</strong></div>
     <div class="rp-stat-card"><span class="rp-stat-label">Laba / rugi bersih</span><strong class="rp-mono rp-stat-value" style="color:${netProfit>=0?'var(--rp-ink)':'var(--rp-red)'}">${rupiah(netProfit)}</strong></div>
     <div class="rp-stat-card"><span class="rp-stat-label">% Laba / rugi</span><strong class="rp-mono rp-stat-value" style="color:${netProfit>=0?'var(--rp-teal)':'var(--rp-red)'}">${netProfit>=0?'+':'-'}${Math.abs(profitMarginPct).toFixed(1)}%</strong></div>
   </div>
+  ${chartsHtml}
   <div class="rp-ruled-head">Detail pendapatan</div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
   <tbody>${sortedRevenueTx.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
@@ -4004,6 +4064,459 @@ function svgTrendChart(labels, series, period, startMs) {
   return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
     <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:680px;height:240px;display:block;">
       <defs>${defs}</defs>${gridLines}${paths}${dots}${labelsSvg}${hitAreas}
+    </svg>
+  </div>`;
+}
+
+/* --------------------- Chart-chart Laba-Rugi (investor-grade) ---------------------
+   4 chart tambahan khusus halaman Laba-Rugi supaya lebih "investor-grade":
+   1) Tren harian pendapatan vs pengeluaran vs laba bersih (area/line)
+   2) Waterfall: Pendapatan -> tiap kategori pengeluaran -> Laba Bersih
+   3) Donut breakdown pengeluaran per kategori
+   4) Bar MoM: pendapatan/pengeluaran/laba bulan ini vs bulan lalu
+   Bonus: bar kontribusi laba per cabang (muncul otomatis kalau lihat "Semua Cabang"
+   dan cabangnya lebih dari satu). */
+
+const RP_CHART_PALETTE = ['var(--rp-red)','var(--rp-amber)','var(--rp-navy)','var(--rp-navy-soft)','var(--rp-teal)','#B98BD9','#5CA8D6','#D98BB0'];
+
+// ---- Hover tooltip untuk chart Laba-Rugi — konsepnya sama persis kayak chart
+// tren di halaman Laporan (svgTrendChart): satu tooltip "melayang" yang
+// ditempel ke <body> (dipakai bareng lewat getTrendTooltipEl/hideTrendHover
+// yang sudah ada), ngikutin posisi kursor, dan di mobile jadi tap-untuk-buka
+// / tap-lagi-untuk-tutup (bukan modal, karena chart ini ringkasan saja).
+// Escape aman untuk string yang disisipkan ke dalam literal JS ber-kutip
+// tunggal di atribut inline (onclick="...('...')"), dipakai untuk nama
+// kategori/cabang yang mungkin mengandung tanda kutip.
+function escJsAttr(s) { return esc(String(s ?? "")).replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
+
+function showRpTip(html, clientX, clientY) {
+  const tip = getTrendTooltipEl();
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  const pad = 12;
+  let x = Number(clientX) + 14, y = Number(clientY) + 14;
+  const rect = tip.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth - pad) x = Math.max(pad, Number(clientX) - rect.width - 14);
+  if (y + rect.height > window.innerHeight - pad) y = Math.max(pad, Number(clientY) - rect.height - 14);
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+}
+function hideRpTip() { hideTrendHover(); }
+function handleRpTipTap(key, html, clientX, clientY) {
+  const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  if (!isMobile) return;
+  if (window._rpTipKey === key) { window._rpTipKey = null; hideRpTip(); return; }
+  window._rpTipKey = key;
+  showRpTip(html, clientX, clientY);
+}
+
+function labaRugiTrendTipHtml(label, revenue, expense, profit) {
+  const pColor = profit >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)';
+  return `<strong>Tanggal ${esc(label)}</strong><br>
+    <span style="color:var(--rp-navy)">●</span> Pendapatan: <span class="rp-mono">${rupiah(revenue)}</span><br>
+    <span style="color:var(--rp-red)">●</span> Pengeluaran: <span class="rp-mono">${rupiah(expense)}</span><br>
+    <span style="color:${pColor}">●</span> Laba bersih: <span class="rp-mono" style="color:${pColor};font-weight:600;">${rupiah(profit)}</span>`;
+}
+function showLabaRugiTrendHover(label, revenue, expense, profit, clientX, clientY) { showRpTip(labaRugiTrendTipHtml(label,revenue,expense,profit), clientX, clientY); }
+function tapLabaRugiTrendHover(label, revenue, expense, profit, clientX, clientY) { handleRpTipTap(`lrtrend-${label}`, labaRugiTrendTipHtml(label,revenue,expense,profit), clientX, clientY); }
+
+function waterfallTipHtml(label, value, isDecrease) {
+  const color = isDecrease ? 'var(--rp-red)' : (value >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)');
+  const sign = isDecrease ? '-' : '';
+  return `<strong>${esc(label)}</strong><br><span class="rp-mono" style="color:${color};font-weight:600;">${sign}${rupiah(Math.abs(value))}</span>`;
+}
+function showWaterfallHover(label, value, isDecrease, clientX, clientY) { showRpTip(waterfallTipHtml(label,value,isDecrease), clientX, clientY); }
+function tapWaterfallHover(label, value, isDecrease, clientX, clientY) { handleRpTipTap(`wf-${label}`, waterfallTipHtml(label,value,isDecrease), clientX, clientY); }
+
+function donutTipHtml(category, amount, pct) {
+  return `<strong>${esc(category)}</strong><br><span class="rp-mono">${rupiah(amount)}</span> · ${pct.toFixed(1)}% dari total pengeluaran`;
+}
+function showDonutHover(category, amount, pct, clientX, clientY) { showRpTip(donutTipHtml(category,amount,pct), clientX, clientY); }
+function tapDonutHover(category, amount, pct, clientX, clientY) { handleRpTipTap(`donut-${category}`, donutTipHtml(category,amount,pct), clientX, clientY); }
+
+function momTipHtml(groupLabel, periodLabel, value) {
+  return `<strong>${esc(groupLabel)}</strong><br>${esc(periodLabel)}: <span class="rp-mono" style="font-weight:600;">${rupiah(value)}</span>`;
+}
+function showMoMHover(groupLabel, periodLabel, value, clientX, clientY) { showRpTip(momTipHtml(groupLabel,periodLabel,value), clientX, clientY); }
+function tapMoMHover(groupLabel, periodLabel, value, clientX, clientY) { handleRpTipTap(`mom-${groupLabel}-${periodLabel}`, momTipHtml(groupLabel,periodLabel,value), clientX, clientY); }
+
+function branchProfitTipHtml(name, profit) {
+  const color = profit >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)';
+  return `<strong>${esc(name)}</strong><br>Laba bersih: <span class="rp-mono" style="color:${color};font-weight:600;">${rupiah(profit)}</span>`;
+}
+function showBranchProfitHover(name, profit, clientX, clientY) { showRpTip(branchProfitTipHtml(name,profit), clientX, clientY); }
+function tapBranchProfitHover(name, profit, clientX, clientY) { handleRpTipTap(`branch-${name}`, branchProfitTipHtml(name,profit), clientX, clientY); }
+
+function buildLabaRugiDailyTrend(start, periodTx, periodExpenses) {
+  const days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+  const revenuePerDay = new Array(days).fill(0);
+  const expensePerDay = new Array(days).fill(0);
+  periodTx.forEach(t => { const d = toJakarta(t.end).getDate(); if (d >= 1 && d <= days) revenuePerDay[d-1] += Number(t.amount||0); });
+  periodExpenses.forEach(e => { const d = toJakarta(e.date).getDate(); if (d >= 1 && d <= days) expensePerDay[d-1] += Number(e.amount||0); });
+  const profitPerDay = revenuePerDay.map((v,i) => v - expensePerDay[i]);
+  const labels = Array.from({length: days}, (_,i) => String(i+1));
+  return { labels, revenuePerDay, expensePerDay, profitPerDay };
+}
+
+function buildExpenseCategoryBreakdown(periodExpenses, maxCategories = 5) {
+  const map = {};
+  periodExpenses.forEach(e => {
+    const key = e.category || 'Lainnya';
+    map[key] = (map[key]||0) + Number(e.amount||0);
+  });
+  let arr = Object.entries(map).map(([category,amount]) => ({category,amount})).sort((a,b)=>b.amount-a.amount);
+  if (arr.length > maxCategories) {
+    const top = arr.slice(0, maxCategories);
+    const restTotal = arr.slice(maxCategories).reduce((a,c)=>a+c.amount,0);
+    top.push({ category: 'Lainnya', amount: restTotal });
+    arr = top;
+  }
+  return arr.map((c,i) => ({ ...c, color: RP_CHART_PALETTE[i % RP_CHART_PALETTE.length] }));
+}
+
+function filterTxByBranchId(txs, bid) {
+  if (bid === "ALL") return txs;
+  return txs.filter(t => {
+    if (t.branchId) return t.branchId === bid;
+    const u = state.units.find(x => x.id === t.unitId);
+    return u ? (u.branchId || getBranches()[0].id) === bid : false;
+  });
+}
+
+function computeLabaRugiTotalsForRange(start, end, bid) {
+  const tx = filterTxByBranchId(state.transactions, bid).filter(t => {
+    const jt = toJakarta(t.end).getTime();
+    return jt >= start.getTime() && jt <= end.getTime();
+  });
+  const expenses = state.expenses.filter(e => {
+    const d = toJakarta(e.date).getTime();
+    const eb = e.branchId || getBranches()[0].id;
+    return d >= start.getTime() && d <= end.getTime() && (bid === "ALL" || eb === bid);
+  });
+  const totalRevenue = tx.reduce((a,t)=>a+Number(t.amount||0),0);
+  const totalExpense = expenses.reduce((a,e)=>a+Number(e.amount||0),0);
+  return { tx, expenses, totalRevenue, totalExpense, netProfit: totalRevenue - totalExpense };
+}
+
+function getPrevMonthRange(start) {
+  let prevMonth = start.getMonth() - 1, prevYear = start.getFullYear();
+  if (prevMonth < 0) { prevMonth = 11; prevYear -= 1; }
+  const pStart = new Date(prevYear, prevMonth, 1);
+  const pEnd = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
+  const label = pStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  return { start: pStart, end: pEnd, label };
+}
+
+function buildBranchProfitBreakdown(periodTx, periodExpenses) {
+  const map = {};
+  const ensure = (id, name) => { if (!map[id]) map[id] = { name, revenue: 0, expense: 0 }; return map[id]; };
+  periodTx.forEach(t => {
+    let bId = t.branchId;
+    if (!bId) { const u = state.units.find(x => x.id === t.unitId); bId = u ? (u.branchId || getBranches()[0].id) : getBranches()[0].id; }
+    ensure(bId, t.branchName || getBranchName(bId)).revenue += Number(t.amount||0);
+  });
+  periodExpenses.forEach(e => {
+    const bId = e.branchId || getBranches()[0].id;
+    ensure(bId, e.branchName || getBranchName(bId)).expense += Number(e.amount||0);
+  });
+  return Object.values(map).map(b => ({ ...b, profit: b.revenue - b.expense })).sort((a,b) => b.profit - a.profit);
+}
+
+// Chart 1: line/area — pendapatan vs pengeluaran vs laba bersih per hari.
+function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDay) {
+  const series = [
+    { label: 'Pendapatan', values: revenuePerDay, color: 'var(--rp-navy)', filled: true },
+    { label: 'Pengeluaran', values: expensePerDay, color: 'var(--rp-red)' },
+    { label: 'Laba bersih', values: profitPerDay, color: 'var(--rp-teal)', dashed: true },
+  ];
+  const w = 760, h = 260, padL = 80, padB = 34, padT = 16, padR = 16;
+  const chartW = w - padL - padR, chartH = h - padT - padB;
+  const allVals = series.flatMap(s => s.values);
+  let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
+  if (max === min) max += 1;
+  const range = max - min;
+  const stepX = labels.length > 1 ? chartW / (labels.length - 1) : 0;
+  const xFor = i => padL + stepX * i;
+  const yFor = v => padT + chartH - ((v - min) / range) * chartH;
+  const zeroY = yFor(0);
+
+  let gridLines = "";
+  const gsteps = 4;
+  for (let s = 0; s <= gsteps; s++) {
+    const val = min + (range * s / gsteps);
+    const y = yFor(val);
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="var(--rp-line)" stroke-width="1" />`;
+    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="10" fill="var(--rp-ink-dim)" text-anchor="end">${rupiah(val)}</text>`;
+  }
+  if (min < 0) gridLines += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--rp-ink-dim)" stroke-width="1" stroke-dasharray="3,3" />`;
+
+  let defs = "", paths = "", dots = "", hitDots = "";
+  series.forEach((s, si) => {
+    const points = s.values.map((v,i) => [xFor(i), yFor(v)]);
+    const linePath = points.map((p,i) => `${i===0?"M":"L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+    if (s.filled) {
+      const gradId = `rpLrGrad${si}`;
+      defs += `<linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${s.color}" stop-opacity="0.35" /><stop offset="100%" stop-color="${s.color}" stop-opacity="0" /></linearGradient>`;
+      const areaPath = `${linePath} L${points[points.length-1][0].toFixed(1)},${zeroY.toFixed(1)} L${points[0][0].toFixed(1)},${zeroY.toFixed(1)} Z`;
+      paths += `<path d="${areaPath}" fill="url(#${gradId})" stroke="none" />`;
+    }
+    paths += `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-dasharray="${s.dashed?"5,4":"0"}" stroke-linejoin="round" stroke-linecap="round" />`;
+    points.forEach((p,i) => {
+      dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.2" fill="${s.color}" pointer-events="none" />`;
+      hitDots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="8" fill="transparent" style="cursor:pointer"
+        onmouseenter="showLabaRugiTrendHover('${escJsAttr(labels[i])}', ${revenuePerDay[i]}, ${expensePerDay[i]}, ${profitPerDay[i]}, event.clientX, event.clientY)"
+        onmousemove="showLabaRugiTrendHover('${escJsAttr(labels[i])}', ${revenuePerDay[i]}, ${expensePerDay[i]}, ${profitPerDay[i]}, event.clientX, event.clientY)"
+        onmouseleave="hideRpTip()"
+        onclick="tapLabaRugiTrendHover('${escJsAttr(labels[i])}', ${revenuePerDay[i]}, ${expensePerDay[i]}, ${profitPerDay[i]}, event.clientX, event.clientY)" />`;
+    });
+  });
+
+  let labelsSvg = "";
+  const skip = labels.length > 20 ? Math.ceil(labels.length/15) : 1;
+  labels.forEach((lab,i) => {
+    if (i % skip !== 0 && i !== labels.length-1) return;
+    labelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${h-9}" font-family="var(--rp-mono)" font-size="10" fill="var(--rp-ink)" text-anchor="middle">${esc(lab)}</text>`;
+  });
+
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:680px;height:260px;display:block;">
+      <defs>${defs}</defs>${gridLines}${paths}${dots}${labelsSvg}${hitDots}
+    </svg>
+  </div>`;
+}
+
+// Chart 2: waterfall — Pendapatan -> tiap kategori pengeluaran -> Laba Bersih.
+function svgWaterfallChart(totalRevenue, categories, netProfit) {
+  const steps = [{ label: 'Pendapatan', from: 0, to: totalRevenue, color: 'var(--rp-navy)' }];
+  let running = totalRevenue;
+  categories.forEach(c => {
+    const to = running - c.amount;
+    steps.push({ label: c.category, from: to, to: running, color: c.color, amount: c.amount });
+    running = to;
+  });
+  steps.push({ label: 'Laba Bersih', from: 0, to: netProfit, color: netProfit >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)' });
+
+  // Di HP viewBox-nya dibikin lebih "ramping" (bukan cuma di-scale-down dari
+  // versi desktop) — bar, jarak antar-bar, dan font ikut mengecil proporsional
+  // supaya semuanya pas dalam lebar layar tanpa perlu digeser.
+  const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  const w = isMobile ? 330 : 760, h = isMobile ? 260 : 300;
+  const padL = isMobile ? 50 : 80, padB = isMobile ? 40 : 46, padT = isMobile ? 22 : 26, padR = isMobile ? 8 : 16;
+  const chartW = w - padL - padR, chartH = h - padT - padB;
+  const allVals = steps.flatMap(s => [s.from, s.to]);
+  let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
+  if (max === min) max += 1;
+  const range = max - min;
+  const yFor = v => padT + chartH - ((v-min)/range) * chartH;
+  const n = steps.length;
+  const bandW = chartW / n;
+  const barW = isMobile ? Math.max(14, Math.min(26, bandW * 0.5)) : Math.min(56, bandW * 0.55);
+  const fmtY = isMobile ? rupiahCompact : rupiah;
+  const gridFont = isMobile ? 8 : 10;
+  const valFont = isMobile ? 8.5 : 10.5;
+  const labFont = isMobile ? 8 : 10;
+  const labMaxChars = isMobile ? 7 : 13;
+
+  let gridLines = "";
+  const gsteps = 4;
+  for (let s = 0; s <= gsteps; s++) {
+    const val = min + range * s / gsteps;
+    const y = yFor(val);
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="var(--rp-line)" stroke-width="1" />`;
+    gridLines += `<text x="${padL-6}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="${gridFont}" fill="var(--rp-ink-dim)" text-anchor="end">${fmtY(val)}</text>`;
+  }
+  const zeroY = yFor(0);
+  gridLines += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--rp-border-strong)" stroke-width="1" />`;
+
+  let bars = "", connectors = "", labelsSvg = "";
+  steps.forEach((s,i) => {
+    const cx = padL + bandW*i + bandW/2;
+    const top = yFor(Math.max(s.from, s.to));
+    const bottom = yFor(Math.min(s.from, s.to));
+    const hgt = Math.max(1, bottom - top);
+    const isDecrease = i > 0 && i < steps.length - 1;
+    bars += `<rect x="${(cx-barW/2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${hgt.toFixed(1)}" rx="3" fill="${s.color}" style="cursor:pointer"
+      onmouseenter="showWaterfallHover('${escJsAttr(s.label)}', ${s.to-s.from}, ${isDecrease}, event.clientX, event.clientY)"
+      onmousemove="showWaterfallHover('${escJsAttr(s.label)}', ${s.to-s.from}, ${isDecrease}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapWaterfallHover('${escJsAttr(s.label)}', ${s.to-s.from}, ${isDecrease}, event.clientX, event.clientY)" />`;
+    const valLabel = (i===0 || i===steps.length-1) ? fmtY(s.to) : `-${fmtY(s.amount)}`;
+    labelsSvg += `<text x="${cx.toFixed(1)}" y="${Math.max(14,top-8).toFixed(1)}" font-family="var(--rp-mono)" font-size="${valFont}" fill="var(--rp-ink)" text-anchor="middle" font-weight="600">${esc(valLabel)}</text>`;
+    const lab = s.label.length > labMaxChars ? s.label.slice(0,labMaxChars-1)+'…' : s.label;
+    labelsSvg += `<text x="${cx.toFixed(1)}" y="${h-padB+18}" font-family="var(--rp-sans)" font-size="${labFont}" fill="var(--rp-ink-dim)" text-anchor="middle">${esc(lab)}</text>`;
+    if (i > 0) {
+      const prevCx = padL + bandW*(i-1) + bandW/2;
+      const prevY = yFor(steps[i-1].to);
+      connectors += `<line x1="${(prevCx+barW/2).toFixed(1)}" y1="${prevY.toFixed(1)}" x2="${(cx-barW/2).toFixed(1)}" y2="${prevY.toFixed(1)}" stroke="var(--rp-border-strong)" stroke-width="1" stroke-dasharray="3,3" />`;
+    }
+  });
+
+  if (isMobile) {
+    return `<div style="width:100%;">
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">
+        ${gridLines}${connectors}${bars}${labelsSvg}
+      </svg>
+    </div>`;
+  }
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:680px;height:300px;display:block;">
+      ${gridLines}${connectors}${bars}${labelsSvg}
+    </svg>
+  </div>`;
+}
+
+// Chart 3: donut — komposisi pengeluaran per kategori.
+function svgExpenseDonutChart(categories, totalExpense) {
+  const cx = 100, cy = 100, r = 78, strokeW = 30;
+  const circumference = 2 * Math.PI * r;
+  let cum = 0, arcs = "";
+  categories.forEach(c => {
+    const frac = totalExpense > 0 ? c.amount / totalExpense : 0;
+    const dash = frac * circumference;
+    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c.color}" stroke-width="${strokeW}"
+      stroke-dasharray="${dash.toFixed(2)} ${(circumference-dash).toFixed(2)}"
+      stroke-dashoffset="${(-cum).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" style="cursor:pointer"
+      onmouseenter="showDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${(frac*100).toFixed(2)}, event.clientX, event.clientY)"
+      onmousemove="showDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${(frac*100).toFixed(2)}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${(frac*100).toFixed(2)}, event.clientX, event.clientY)" />`;
+    cum += dash;
+  });
+  const centerLabel = `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="var(--rp-mono)" font-size="10.5" fill="var(--rp-ink-dim)">Total biaya</text>
+    <text x="${cx}" y="${cy+15}" text-anchor="middle" font-family="var(--rp-mono)" font-size="12.5" font-weight="700" fill="var(--rp-ink)">${rupiah(totalExpense)}</text>`;
+  const legend = categories.map(c => {
+    const pct = totalExpense > 0 ? (c.amount/totalExpense*100) : 0;
+    return `<div class="rp-legend-item" style="cursor:pointer"
+      onmouseenter="showDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${pct.toFixed(2)}, event.clientX, event.clientY)"
+      onmousemove="showDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${pct.toFixed(2)}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapDonutHover('${escJsAttr(c.category)}', ${c.amount}, ${pct.toFixed(2)}, event.clientX, event.clientY)"
+      ><span class="rp-legend-swatch" style="background:${c.color};height:10px;width:10px;border-radius:50%;"></span>${esc(c.category)} — <span class="rp-mono">${rupiah(c.amount)}</span> (${pct.toFixed(1)}%)</div>`;
+  }).join('');
+  return `<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:flex-start;">
+    <svg viewBox="0 0 200 200" style="width:190px;height:190px;flex-shrink:0;">${arcs}${centerLabel}</svg>
+    <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--rp-ink-dim);min-width:180px;">${legend}</div>
+  </div>`;
+}
+
+// Chart 4: bar berdampingan — pendapatan/pengeluaran/laba bulan ini vs bulan lalu.
+function svgMoMBarChart(current, previous, currentLabel, previousLabel) {
+  const groups = [
+    { label: 'Pendapatan', cur: current.totalRevenue, prev: previous.totalRevenue, curColor: 'var(--rp-navy)' },
+    { label: 'Pengeluaran', cur: current.totalExpense, prev: previous.totalExpense, curColor: 'var(--rp-red)' },
+    { label: 'Laba Bersih', cur: current.netProfit, prev: previous.netProfit, curColor: current.netProfit >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)' },
+  ];
+  const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  const w = isMobile ? 330 : 760, h = isMobile ? 240 : 280;
+  const padL = isMobile ? 48 : 80, padB = isMobile ? 34 : 48, padT = isMobile ? 16 : 20, padR = isMobile ? 8 : 16;
+  const chartW = w - padL - padR, chartH = h - padT - padB;
+  const allVals = groups.flatMap(g => [g.cur, g.prev]);
+  let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
+  if (max === min) max += 1;
+  const range = max - min;
+  const yFor = v => padT + chartH - ((v-min)/range) * chartH;
+  const zeroY = yFor(0);
+  const n = groups.length;
+  const bandW = chartW / n;
+  const barW = isMobile ? Math.max(12, Math.min(28, bandW * 0.3)) : Math.min(64, bandW * 0.28);
+  const gap = isMobile ? 5 : 10;
+  const fmtY = isMobile ? rupiahCompact : rupiah;
+  const gridFont = isMobile ? 8 : 10;
+  const labFont = isMobile ? 9 : 11;
+
+  let gridLines = "";
+  const gsteps = 4;
+  for (let s = 0; s <= gsteps; s++) {
+    const val = min + range * s / gsteps;
+    const y = yFor(val);
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="var(--rp-line)" stroke-width="1" />`;
+    gridLines += `<text x="${padL-6}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="${gridFont}" fill="var(--rp-ink-dim)" text-anchor="end">${fmtY(val)}</text>`;
+  }
+  gridLines += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--rp-border-strong)" stroke-width="1" />`;
+
+  let bars = "", labelsSvg = "";
+  groups.forEach((g,i) => {
+    const bandCx = padL + bandW*i + bandW/2;
+    const prevX = bandCx - gap/2 - barW;
+    const curX = bandCx + gap/2;
+    const prevTop = yFor(Math.max(g.prev,0)), prevBottom = yFor(Math.min(g.prev,0));
+    const curTop = yFor(Math.max(g.cur,0)), curBottom = yFor(Math.min(g.cur,0));
+    bars += `<rect x="${prevX.toFixed(1)}" y="${prevTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1,prevBottom-prevTop).toFixed(1)}" rx="3" fill="var(--rp-ink-dim)" opacity="0.55" style="cursor:pointer"
+      onmouseenter="showMoMHover('${escJsAttr(g.label)}', '${escJsAttr(previousLabel)}', ${g.prev}, event.clientX, event.clientY)"
+      onmousemove="showMoMHover('${escJsAttr(g.label)}', '${escJsAttr(previousLabel)}', ${g.prev}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapMoMHover('${escJsAttr(g.label)}', '${escJsAttr(previousLabel)}', ${g.prev}, event.clientX, event.clientY)" />`;
+    bars += `<rect x="${curX.toFixed(1)}" y="${curTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1,curBottom-curTop).toFixed(1)}" rx="3" fill="${g.curColor}" style="cursor:pointer"
+      onmouseenter="showMoMHover('${escJsAttr(g.label)}', '${escJsAttr(currentLabel)}', ${g.cur}, event.clientX, event.clientY)"
+      onmousemove="showMoMHover('${escJsAttr(g.label)}', '${escJsAttr(currentLabel)}', ${g.cur}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapMoMHover('${escJsAttr(g.label)}', '${escJsAttr(currentLabel)}', ${g.cur}, event.clientX, event.clientY)" />`;
+    labelsSvg += `<text x="${bandCx.toFixed(1)}" y="${h-padB+20}" font-family="var(--rp-sans)" font-size="${labFont}" fill="var(--rp-ink)" text-anchor="middle" font-weight="600">${esc(g.label)}</text>`;
+  });
+
+  if (isMobile) {
+    return `<div style="width:100%;">
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">
+        ${gridLines}${bars}${labelsSvg}
+      </svg>
+    </div>`;
+  }
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:600px;height:280px;display:block;">
+      ${gridLines}${bars}${labelsSvg}
+    </svg>
+  </div>`;
+}
+
+// Bonus: bar kontribusi laba per cabang (khusus tampilan "Semua Cabang", multi-cabang).
+function svgBranchProfitBarChart(branchData) {
+  const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  const w = isMobile ? 330 : 760, rowH = isMobile ? 32 : 40;
+  const padL = isMobile ? 92 : 170, padR = isMobile ? 66 : 100, padT = isMobile ? 10 : 14, padB = isMobile ? 10 : 14;
+  const h = padT + padB + rowH * branchData.length;
+  const chartW = w - padL - padR;
+  const allVals = branchData.flatMap(b => [b.profit, 0]);
+  let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
+  if (max === min) max += 1;
+  const range = max - min;
+  const xFor = v => padL + ((v-min)/range) * chartW;
+  const zeroX = xFor(0);
+  const fmtLabel = isMobile ? rupiahCompact : rupiah;
+  const nameFont = isMobile ? 9.5 : 11;
+  const valFont = isMobile ? 9.5 : 11;
+  const barH = isMobile ? 16 : 20;
+  const nameMaxChars = isMobile ? 11 : 999;
+
+  let bars = "", labelsSvg = "";
+  const gridLines = `<line x1="${zeroX.toFixed(1)}" y1="${padT}" x2="${zeroX.toFixed(1)}" y2="${h-padB}" stroke="var(--rp-border-strong)" stroke-width="1" />`;
+  branchData.forEach((b,i) => {
+    const y = padT + rowH*i + rowH*0.5;
+    const barTop = y - barH/2;
+    const x1 = Math.min(zeroX, xFor(b.profit)), x2 = Math.max(zeroX, xFor(b.profit));
+    const color = b.profit >= 0 ? 'var(--rp-teal)' : 'var(--rp-red)';
+    bars += `<rect x="${x1.toFixed(1)}" y="${barTop.toFixed(1)}" width="${Math.max(1,x2-x1).toFixed(1)}" height="${barH}" rx="3" fill="${color}" style="cursor:pointer"
+      onmouseenter="showBranchProfitHover('${escJsAttr(b.name)}', ${b.profit}, event.clientX, event.clientY)"
+      onmousemove="showBranchProfitHover('${escJsAttr(b.name)}', ${b.profit}, event.clientX, event.clientY)"
+      onmouseleave="hideRpTip()"
+      onclick="tapBranchProfitHover('${escJsAttr(b.name)}', ${b.profit}, event.clientX, event.clientY)" />`;
+    const nameLab = b.name.length > nameMaxChars ? b.name.slice(0,nameMaxChars-1)+'…' : b.name;
+    labelsSvg += `<text x="${padL-10}" y="${(y+4).toFixed(1)}" font-family="var(--rp-sans)" font-size="${nameFont}" fill="var(--rp-ink)" text-anchor="end">${esc(nameLab)}</text>`;
+    // Label nominal selalu ditaruh di kolom kanan tetap (di luar area bar),
+    // bukan nempel ke ujung bar — supaya untuk bar negatif yang pendek
+    // (dekat garis nol) labelnya tidak tabrakan dengan nama cabang di kiri.
+    labelsSvg += `<text x="${(w-padR+12).toFixed(1)}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="${valFont}" font-weight="600" fill="${color}" text-anchor="start">${fmtLabel(b.profit)}</text>`;
+  });
+
+  if (isMobile) {
+    return `<div style="width:100%;">
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">
+        ${gridLines}${bars}${labelsSvg}
+      </svg>
+    </div>`;
+  }
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:520px;height:${h}px;display:block;">
+      ${gridLines}${bars}${labelsSvg}
     </svg>
   </div>`;
 }
