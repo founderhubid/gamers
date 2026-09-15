@@ -1320,6 +1320,7 @@ body:before{
 <input type="file" id="header-photo-file-input" accept="image/*" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
@@ -2179,6 +2180,8 @@ function openReceiptModal(trx) {
     <div class="rp-ruled-head" style="margin-top:14px;">Kirim struk ke pelanggan</div>
     <label class="rp-field"><span>No. HP WhatsApp</span><input id="receipt-wa-phone" value="${esc(knownPhone)}" placeholder="08xxxxxxxxxx" /></label>
     <button class="rp-btn rp-btn-ghost" style="width:100%;border-color:#25D366;color:#128C4A;" onclick="sendReceiptWhatsApp('${trx.id}')">${iconWhatsApp(15)} Kirim struk via WhatsApp</button>
+    <p class="rp-dim" style="margin:6px 0 0;font-size:11.5px;">Struk PDF ikut terunduh otomatis — tinggal lampirkan manual di chat WhatsApp yang kebuka (WA belum bisa nerima lampiran otomatis lewat link chat).</p>
+    <button class="rp-btn rp-btn-ghost" style="width:100%;margin-top:8px;" onclick="downloadReceiptPdf('${trx.id}')">${icon("download", 14)} Unduh PDF struk saja</button>
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="printReceipt('${trx.id}')">${icon("printer", 14)} Cetak</button>
       <button class="rp-btn rp-btn-start" style="flex:1" onclick="closeModal()">Selesai</button>
@@ -2215,12 +2218,115 @@ function buildReceiptWaMessage(trx) {
     `Sampai jumpa lagi, Kak! 🙌`,
   ].join("\n");
 }
+// ---- PDF struk (buat dilampirkan manual pas kirim WA) ----
+// wa.me cuma bisa buka chat dengan teks siap kirim — nggak ada cara resmi
+// nempelin file lewat link itu (keterbatasan WhatsApp, bukan kode kita).
+// Jadi alurnya: struk di-generate jadi PDF lalu diunduh otomatis, kasir
+// tinggal attach manual filenya di jendela chat yang kebuka.
+//
+// Halaman PDF-nya sengaja DIUKUR DULU (render ke dokumen sementara) baru
+// dokumen final dibuat dengan tinggi persis sepanjang isi struk + sedikit
+// margin — supaya hasilnya di-crop pas ke struknya aja, nggak ada sisa
+// area kosong panjang kayak kalau dipaksa ke ukuran kertas A4.
+function receiptPdfRows(trx) {
+  const rows = [
+    ["Tanggal", `${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`],
+    ["Penyewa", trx.customerName],
+    ["Unit", trx.unitName],
+    ["Durasi", fmtHMS(trx.minutes * 60000)],
+    ["Metode bayar", trx.payment],
+  ];
+  if (trx.note) rows.push(["Catatan", trx.note]);
+  return rows;
+}
+function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
+  const centerX = marginX + contentW / 2;
+  let y = 10;
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(13);
+  doc.text(String(state.settings.businessName || ""), centerX, y, { align: "center" });
+  y += 6;
+
+  if (trx.branchName) {
+    doc.setFont("courier", "normal");
+    doc.setFontSize(9.5);
+    doc.text(String(trx.branchName), centerX, y, { align: "center" });
+    y += 5.5;
+  }
+  y += 1.5;
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(marginX, y, marginX + contentW, y);
+  doc.setLineDashPattern([], 0);
+  y += 6;
+
+  doc.setFontSize(9.5);
+  rows.forEach(([label, value]) => {
+    doc.setFont("courier", "normal");
+    const valueLines = doc.splitTextToSize(String(value), contentW * 0.56);
+    doc.text(String(label), marginX, y);
+    doc.text(valueLines, marginX + contentW, y, { align: "right" });
+    y += 5 * valueLines.length;
+  });
+
+  y += 1.5;
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(marginX, y, marginX + contentW, y);
+  doc.setLineDashPattern([], 0);
+  y += 7;
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(12.5);
+  doc.text("TOTAL", marginX, y);
+  doc.text(rupiah(trx.amount), marginX + contentW, y, { align: "right" });
+  y += 9;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(9);
+  doc.text("Terima kasih!", centerX, y, { align: "center" });
+  y += 6;
+
+  return y;
+}
+function buildReceiptPdf(trx) {
+  const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+  if (!jsPDFCtor) { flash("Pustaka PDF belum siap termuat, coba lagi sebentar."); return null; }
+  const rows = receiptPdfRows(trx);
+  const pageW = 80, marginX = 6, contentW = pageW - marginX * 2;
+
+  // Render "kosong-kosongan" ke halaman sementara cuma buat tahu tinggi
+  // kontennya bakal berapa mm.
+  const measureDoc = new jsPDFCtor({ unit: "mm", format: [pageW, 400] });
+  const measuredY = drawReceiptPdfContent(measureDoc, trx, rows, contentW, marginX);
+
+  // Halaman final tingginya pas ngikutin konten (+ margin bawah kecil).
+  const doc = new jsPDFCtor({ unit: "mm", format: [pageW, measuredY + 4] });
+  drawReceiptPdfContent(doc, trx, rows, contentW, marginX);
+  return doc;
+}
+function receiptPdfFilename(trx) {
+  const datePart = new Date(trx.end).toISOString().slice(0, 10);
+  const safeName = String(trx.customerName || "struk").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "struk";
+  return `Struk-${safeName}-${datePart}.pdf`;
+}
+function downloadReceiptPdf(trxId) {
+  const trx = state.transactions.find(t => t.id === trxId);
+  if (!trx) return;
+  const doc = buildReceiptPdf(trx);
+  if (!doc) return;
+  doc.save(receiptPdfFilename(trx));
+}
 function sendReceiptWhatsApp(trxId) {
   const trx = state.transactions.find(t => t.id === trxId);
   if (!trx) return;
   const phoneInput = document.getElementById("receipt-wa-phone");
   const phone = (phoneInput?.value || "").trim();
   if (!phone) { flash("Isi dulu No. HP WhatsApp pelanggan untuk kirim struk."); return; }
+  const doc = buildReceiptPdf(trx);
+  if (doc) {
+    doc.save(receiptPdfFilename(trx));
+    flash("Struk PDF diunduh — lampirkan manual di chat WhatsApp yang kebuka ya.");
+  }
   openWhatsApp(phone, buildReceiptWaMessage(trx));
 }
 // Cetak dibikin lewat window terpisah (bukan window.print() langsung di
@@ -4236,7 +4342,9 @@ function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDa
     { label: 'Pengeluaran', values: expensePerDay, color: 'var(--rp-red)' },
     { label: 'Laba bersih', values: profitPerDay, color: 'var(--rp-teal)', dashed: true },
   ];
-  const w = 760, h = 260, padL = 80, padB = 34, padT = 16, padR = 16;
+  const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  const w = isMobile ? 330 : 760, h = isMobile ? 220 : 260;
+  const padL = isMobile ? 46 : 80, padB = isMobile ? 26 : 34, padT = isMobile ? 14 : 16, padR = isMobile ? 8 : 16;
   const chartW = w - padL - padR, chartH = h - padT - padB;
   const allVals = series.flatMap(s => s.values);
   let max = Math.max(0, ...allVals), min = Math.min(0, ...allVals);
@@ -4246,6 +4354,9 @@ function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDa
   const xFor = i => padL + stepX * i;
   const yFor = v => padT + chartH - ((v - min) / range) * chartH;
   const zeroY = yFor(0);
+  const fmtY = isMobile ? rupiahCompact : rupiah;
+  const gridFont = isMobile ? 8 : 10;
+  const labFont = isMobile ? 8 : 10;
 
   let gridLines = "";
   const gsteps = 4;
@@ -4253,11 +4364,19 @@ function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDa
     const val = min + (range * s / gsteps);
     const y = yFor(val);
     gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="var(--rp-line)" stroke-width="1" />`;
-    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="10" fill="var(--rp-ink-dim)" text-anchor="end">${rupiah(val)}</text>`;
+    gridLines += `<text x="${padL-6}" y="${(y+4).toFixed(1)}" font-family="var(--rp-mono)" font-size="${gridFont}" fill="var(--rp-ink-dim)" text-anchor="end">${fmtY(val)}</text>`;
   }
   if (min < 0) gridLines += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--rp-ink-dim)" stroke-width="1" stroke-dasharray="3,3" />`;
 
-  let defs = "", paths = "", dots = "", hitDots = "";
+  // Dihitung duluan (sebelum loop titik) karena dipakai juga buat nentuin
+  // titik mana yang dikasih label angka kecil — biar konsisten sama tanggal
+  // yang ditampilkan di sumbu-X dan nggak dempet-dempetan.
+  const targetLabels = isMobile ? 5 : 15;
+  const skip = labels.length > targetLabels ? Math.ceil(labels.length/targetLabels) : 1;
+  const showPoint = i => i % skip === 0 || i === labels.length-1;
+  const valFont = isMobile ? 5.5 : 6.5;
+
+  let defs = "", paths = "", dots = "", hitDots = "", pointLabels = "";
   series.forEach((s, si) => {
     const points = s.values.map((v,i) => [xFor(i), yFor(v)]);
     const linePath = points.map((p,i) => `${i===0?"M":"L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
@@ -4267,10 +4386,16 @@ function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDa
       const areaPath = `${linePath} L${points[points.length-1][0].toFixed(1)},${zeroY.toFixed(1)} L${points[0][0].toFixed(1)},${zeroY.toFixed(1)} Z`;
       paths += `<path d="${areaPath}" fill="url(#${gradId})" stroke="none" />`;
     }
-    paths += `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-dasharray="${s.dashed?"5,4":"0"}" stroke-linejoin="round" stroke-linecap="round" />`;
+    paths += `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="${isMobile?2:2.5}" stroke-dasharray="${s.dashed?"5,4":"0"}" stroke-linejoin="round" stroke-linecap="round" />`;
     points.forEach((p,i) => {
-      dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.2" fill="${s.color}" pointer-events="none" />`;
-      hitDots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="8" fill="transparent" style="cursor:pointer"
+      dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isMobile?1.8:2.2}" fill="${s.color}" pointer-events="none" />`;
+      if (showPoint(i)) {
+        // Label naik/turun bergantian per seri (si) biar 3 garis yang
+        // berdekatan nilainya nggak numpuk teksnya satu sama lain.
+        const ly = p[1] - 5 - si*7;
+        pointLabels += `<text x="${p[0].toFixed(1)}" y="${ly.toFixed(1)}" font-family="var(--rp-mono)" font-size="${valFont}" fill="${s.color}" text-anchor="middle" pointer-events="none">${fmtY(s.values[i])}</text>`;
+      }
+      hitDots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isMobile?7:8}" fill="transparent" style="cursor:pointer"
         onmouseenter="showLabaRugiTrendHover('${escJsAttr(labels[i])}', ${revenuePerDay[i]}, ${expensePerDay[i]}, ${profitPerDay[i]}, event.clientX, event.clientY)"
         onmousemove="showLabaRugiTrendHover('${escJsAttr(labels[i])}', ${revenuePerDay[i]}, ${expensePerDay[i]}, ${profitPerDay[i]}, event.clientX, event.clientY)"
         onmouseleave="hideRpTip()"
@@ -4278,16 +4403,25 @@ function svgLabaRugiTrendChart(labels, revenuePerDay, expensePerDay, profitPerDa
     });
   });
 
+  // Di HP label tanggal di sumbu-X dipangkas jauh lebih ketat (target ~5 label
+  // yang kebaca) dibanding versi desktop (bisa sampai ~15 label), supaya tidak
+  // dempet-dempetan di layar sempit.
   let labelsSvg = "";
-  const skip = labels.length > 20 ? Math.ceil(labels.length/15) : 1;
   labels.forEach((lab,i) => {
-    if (i % skip !== 0 && i !== labels.length-1) return;
-    labelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${h-9}" font-family="var(--rp-mono)" font-size="10" fill="var(--rp-ink)" text-anchor="middle">${esc(lab)}</text>`;
+    if (!showPoint(i)) return;
+    labelsSvg += `<text x="${xFor(i).toFixed(1)}" y="${h-9}" font-family="var(--rp-mono)" font-size="${labFont}" fill="var(--rp-ink)" text-anchor="middle">${esc(lab)}</text>`;
   });
 
+  if (isMobile) {
+    return `<div style="width:100%;">
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">
+        <defs>${defs}</defs>${gridLines}${paths}${dots}${pointLabels}${labelsSvg}${hitDots}
+      </svg>
+    </div>`;
+  }
   return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
     <svg viewBox="0 0 ${w} ${h}" style="width:100%;min-width:680px;height:260px;display:block;">
-      <defs>${defs}</defs>${gridLines}${paths}${dots}${labelsSvg}${hitDots}
+      <defs>${defs}</defs>${gridLines}${paths}${dots}${pointLabels}${labelsSvg}${hitDots}
     </svg>
   </div>`;
 }
