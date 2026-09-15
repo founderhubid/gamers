@@ -310,7 +310,9 @@
   .rp-pill.is-on { background: var(--rp-chip-bg); color: var(--rp-chip-text); border-color: transparent; }
 
   .rp-receipt { border: 1px dashed var(--rp-border-strong); border-radius: 10px; padding: 12px 14px; }
-  .rp-receipt-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .rp-receipt-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; padding: 4px 0; }
+  .rp-receipt-row > span:first-child { min-width: 0; overflow-wrap: break-word; }
+  .rp-receipt-row > strong, .rp-receipt-row > span:last-child { flex-shrink: 0; text-align: right; white-space: nowrap; }
   .rp-receipt-line { border-top: 1px dashed var(--rp-border-strong); margin: 4px 0; }
   .rp-receipt-total { font-size: 15px; font-family: var(--rp-mono); }
 
@@ -1463,6 +1465,7 @@ const ICONS = {
   "user-plus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
   wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/><path d="M18 13h.01"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
 };
 // Logo WhatsApp asli pakai fill (bukan stroke) biar bentuknya kebaca —
 // makanya dirender lewat fungsi terpisah ini, bukan lewat icon() biasa
@@ -2312,10 +2315,11 @@ function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
   doc.setFontSize(9.5);
   rows.forEach(([label, value]) => {
     doc.setFont("courier", "normal");
+    const labelLines = doc.splitTextToSize(String(label), contentW * 0.42);
     const valueLines = doc.splitTextToSize(String(value), contentW * 0.56);
-    doc.text(String(label), marginX, y);
+    doc.text(labelLines, marginX, y);
     doc.text(valueLines, marginX + contentW, y, { align: "right" });
-    y += 5 * valueLines.length;
+    y += 5 * Math.max(labelLines.length, valueLines.length);
   });
 
   y += 1.5;
@@ -2392,7 +2396,9 @@ function printReceipt(trxId) {
     body{ font-family:'Courier New',monospace; font-size:12px; width:280px; margin:0 auto; padding:12px; color:#000; }
     h1{ font-size:14px; text-align:center; margin:0 0 2px; }
     .sub{ text-align:center; font-size:11px; margin-bottom:10px; }
-    .row{ display:flex; justify-content:space-between; gap:10px; margin:3px 0; }
+    .row{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:3px 0; }
+    .row span:first-child{ min-width:0; overflow-wrap:break-word; }
+    .row span:last-child{ flex-shrink:0; text-align:right; white-space:nowrap; }
     .line{ border-top:1px dashed #000; margin:8px 0; }
     .total{ font-size:14px; font-weight:bold; }
     .foot{ text-align:center; margin-top:14px; font-size:11px; }
@@ -2798,13 +2804,18 @@ function modalShell(title, bodyHtml) {
 // langsung mengubah/menghapus data. `onConfirm` disimpan sementara di
 // window._rpConfirmAction dan baru dieksekusi kalau tombol konfirmasi
 // beneran ditekan; kalau modal ditutup/dibatalkan, aksinya nggak jalan.
+// `opts.icon` opsional buat nimpa ikon default: aksi hapus data (danger,
+// default) pakai ikon tempat sampah, aksi lain yang cuma "final & tidak
+// bisa diubah lagi" (misal tutup transaksi) sebaiknya kirim icon lain
+// (mis. "check") biar nggak kelihatan kayak lagi menghapus sesuatu.
 function openConfirmModal(opts) {
   window._rpConfirmAction = typeof opts.onConfirm === "function" ? opts.onConfirm : null;
+  const iconName = opts.icon || (opts.danger === false ? null : "trash");
   openModal(modalShell(opts.title || "Konfirmasi", `
     <p style="margin:0;line-height:1.55;color:var(--rp-ink);">${esc(opts.message || "Yakin ingin melanjutkan aksi ini?")}</p>
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="closeModal()">${esc(opts.cancelLabel || "Batal")}</button>
-      <button class="rp-btn ${opts.danger === false ? "rp-btn-start" : "rp-btn-stop"}" onclick="runRpConfirmAction()">${opts.danger === false ? "" : icon("trash",14)} ${esc(opts.confirmLabel || "Ya, lanjutkan")}</button>
+      <button class="rp-btn ${opts.danger === false ? "rp-btn-start" : "rp-btn-stop"}" onclick="runRpConfirmAction()">${iconName ? icon(iconName,14) : ""} ${esc(opts.confirmLabel || "Ya, lanjutkan")}</button>
     </div>
   `));
 }
@@ -3072,6 +3083,7 @@ function confirmFinish(unitId) {
     title: "Tutup transaksi ini?",
     message: `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
     confirmLabel: "Ya, selesaikan",
+    icon: "check",
     onConfirm: () => {
       finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "");
       window._finishStop = null;
