@@ -2146,7 +2146,7 @@ function extendRental(unitId, addMinutes) {
   flash("Waktu sewa diperpanjang.");
 }
 
-function finishRental(unitId, payment, discount, frozenMs, promoName, isFixed) {
+function finishRental(unitId, payment, discount, frozenMs, promoName, isFixed, cashReceived, change) {
   const session = state.activeRentals[unitId];
   const unit = state.units.find(u => u.id === unitId);
   if (!session || !unit) return;
@@ -2183,6 +2183,10 @@ function finishRental(unitId, payment, discount, frozenMs, promoName, isFixed) {
     // di struk (modal, WA, PDF, & cetak) — bukan cuma nilai akhir (amount).
     minutes, subtotal, discount: appliedDiscount, promoName: promoName || "",
     amount, payment, note: session.note,
+    // Cuma keisi kalau metode bayarnya Tunai — dipakai buat nampilin baris
+    // "Uang tunai" & "Kembalian" di struk (modal, WA, PDF, & cetak).
+    cashReceived: payment === "Tunai" ? cashReceived : null,
+    change: payment === "Tunai" ? change : null,
   };
   state.transactions.unshift(trx);
   delete state.activeRentals[unitId];
@@ -2225,6 +2229,9 @@ function openReceiptModal(trx) {
       <div class="rp-receipt-row"><span>Jam selesai</span><strong class="rp-mono">${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}</strong></div>
       <div class="rp-receipt-row"><span>Durasi</span><strong class="rp-mono">${fmtHMS(trx.minutes * 60000)}</strong></div>
       <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
+      ${trx.payment === "Tunai" && trx.cashReceived != null ? `
+      <div class="rp-receipt-row"><span>Uang tunai</span><strong class="rp-mono">${rupiah(trx.cashReceived)}</strong></div>
+      <div class="rp-receipt-row"><span>Kembalian</span><strong class="rp-mono">${rupiah(trx.change)}</strong></div>` : ""}
       ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
       <div class="rp-receipt-line"></div>
       ${trx.discount ? `
@@ -2272,6 +2279,10 @@ function buildReceiptWaMessage(trx) {
     `🕑 Jam selesai: ${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}`,
     `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
     `💳 Metode bayar: ${trx.payment}`,
+    ...(trx.payment === "Tunai" && trx.cashReceived != null ? [
+      `💵 Uang tunai: ${rupiah(trx.cashReceived)}`,
+      `🔁 Kembalian: ${rupiah(trx.change)}`,
+    ] : []),
     ...(trx.discount ? [
       `🧾 Subtotal: ${rupiah(receiptSubtotal(trx))}`,
       `🏷️ Diskon${trx.promoName ? ` (${trx.promoName})` : ""}: -${rupiah(trx.discount)}`,
@@ -2305,6 +2316,10 @@ function receiptPdfRows(trx) {
     ["Durasi", fmtHMS(trx.minutes * 60000)],
     ["Metode bayar", trx.payment],
   ];
+  if (trx.payment === "Tunai" && trx.cashReceived != null) {
+    rows.push(["Uang tunai", rupiah(trx.cashReceived)]);
+    rows.push(["Kembalian", rupiah(trx.change)]);
+  }
   if (trx.note) rows.push(["Catatan", trx.note]);
   if (trx.discount) {
     rows.push(["Subtotal", rupiah(receiptSubtotal(trx))]);
@@ -3058,13 +3073,45 @@ function openFinishModal(unitId) {
     ${finishPromoFieldHtml(unit, unitId)}
     <label class="rp-field"><span>Diskon (Rp, opsional)</span><input id="finish-discount" type="number" min="0" value="0" oninput="clearFinishPromoIfEdited('${unitId}')" /></label>
     <label class="rp-field"><span>Metode pembayaran</span>
-      <select id="finish-payment"><option>Tunai</option><option>QRIS</option><option>Transfer</option></select>
+      <select id="finish-payment" onchange="toggleFinishCashField()"><option>Tunai</option><option>QRIS</option><option>Transfer</option></select>
     </label>
+    <div id="finish-cash-wrap"></div>
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
       <button class="rp-btn rp-btn-stop" onclick="confirmFinish('${unitId}')">${icon("stop",14)} Selesaikan &amp; catat</button>
     </div>
   `));
+  toggleFinishCashField();
+}
+// Field "Uang tunai" cuma muncul kalau metode bayar = Tunai — begitu dipilih,
+// kasir tinggal isi nominal uang yang diterima dan kembaliannya kehitung
+// otomatis, persis kayak di kasir beneran.
+function toggleFinishCashField() {
+  const sel = document.getElementById("finish-payment");
+  const wrap = document.getElementById("finish-cash-wrap");
+  if (!sel || !wrap) return;
+  if (sel.value === "Tunai") {
+    wrap.innerHTML = `
+      <label class="rp-field"><span>Uang tunai diterima (Rp)</span><input id="finish-cash" type="number" min="0" step="1000" placeholder="0" oninput="updateFinishChange()" /></label>
+      <div class="rp-receipt-row" style="margin-top:-4px;"><span>Kembalian</span><strong class="rp-mono" id="finish-change">${rupiah(0)}</strong></div>
+    `;
+    updateFinishChange();
+  } else {
+    wrap.innerHTML = "";
+  }
+}
+// Hitung kembalian = uang tunai - total tagihan. Kalau uangnya kurang,
+// angkanya ditampilkan merah biar kasir sadar belum cukup (bukan kembalian
+// negatif yang membingungkan).
+function updateFinishChange() {
+  const cashInput = document.getElementById("finish-cash");
+  const changeEl = document.getElementById("finish-change");
+  if (!cashInput || !changeEl) return;
+  const amount = computeFinishAmount();
+  const cash = Number(cashInput.value) || 0;
+  const change = cash - amount;
+  changeEl.textContent = (change < 0 ? "Kurang " : "") + rupiah(Math.abs(change));
+  changeEl.style.color = change < 0 ? "var(--rp-red)" : "";
 }
 // Dropdown promo hanya dimunculkan kalau cabang unit ini punya promo
 // terdaftar (dikelola admin di menu Cabang & Unit). Pilih tanpa promo tetap
@@ -3100,13 +3147,23 @@ function clearFinishPromoIfEdited(unitId){
   if (promoSel) promoSel.value = "";
   updateFinishTotal(unitId);
 }
+// Dipakai bareng oleh updateFinishTotal (nampilin total) dan updateFinishChange
+// (hitung kembalian) supaya keduanya selalu ngambil dari sumber angka yang sama.
+function computeFinishAmount() {
+  if (!window._finishStop) return 0;
+  const unit = state.units.find(u => u.id === window._finishStop.unitId);
+  if (!unit) return 0;
+  const discount = Number(document.getElementById("finish-discount")?.value) || 0;
+  return Math.max(0, Math.round(window._finishStop.ms / 3600000 * unit.rate - discount));
+}
 function updateFinishTotal(unitId) {
   const unit = state.units.find(u => u.id === unitId);
   if (!unit || !window._finishStop || window._finishStop.unitId !== unitId) return;
-  const discount = Number(document.getElementById("finish-discount").value) || 0;
-  const amount = Math.max(0, Math.round(window._finishStop.ms / 3600000 * unit.rate - discount));
+  const amount = computeFinishAmount();
   const el = document.getElementById("finish-total");
   if (el) el.textContent = rupiah(amount);
+  // Diskon berubah -> total berubah -> kembalian ikut harus di-refresh.
+  updateFinishChange();
 }
 function confirmFinish(unitId) {
   const payment = document.getElementById("finish-payment").value;
@@ -3116,13 +3173,26 @@ function confirmFinish(unitId) {
   const frozenMs = window._finishStop && window._finishStop.unitId === unitId ? window._finishStop.ms : null;
   const isFixed = !!(window._finishStop && window._finishStop.unitId === unitId && window._finishStop.isFixed);
   const totalText = document.getElementById("finish-total")?.textContent || "";
+
+  // Khusus Tunai: wajib isi uang yang diterima, dan gak boleh kurang dari
+  // total tagihan — sama kayak kasir beneran nolak kalau uangnya kurang.
+  let cashReceived = null, change = null;
+  if (payment === "Tunai") {
+    const amount = computeFinishAmount();
+    cashReceived = Number(document.getElementById("finish-cash")?.value) || 0;
+    if (cashReceived < amount) { flash("Uang tunai yang diterima masih kurang dari total tagihan."); return; }
+    change = cashReceived - amount;
+  }
+
   openConfirmModal({
     title: "Tutup transaksi ini?",
-    message: `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
+    message: payment === "Tunai"
+      ? `Sewa akan ditutup dengan total ${totalText} (Tunai). Uang diterima ${rupiah(cashReceived)}, kembalian ${rupiah(change)}. Setelah dicatat, transaksi ini tidak bisa diubah lagi.`
+      : `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
     confirmLabel: "Ya, selesaikan",
     icon: "check",
     onConfirm: () => {
-      finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "", isFixed);
+      finishRental(unitId, payment, discount, frozenMs, promo ? promo.name : "", isFixed, cashReceived, change);
       window._finishStop = null;
     },
   });
