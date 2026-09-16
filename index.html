@@ -2266,16 +2266,15 @@ function openReceiptModal(trx) {
       <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
       ${trx.payment === "Transfer" && trx.bankAccount ? `<div class="rp-receipt-row"><span>No. rekening</span><strong>${esc(trx.bankAccount)}</strong></div>` : ""}
       ${trx.payment === "QRIS" && trx.qrisImage ? `<div style="text-align:center;margin:8px 0;"><img src="${esc(trx.qrisImage)}" alt="QRIS" style="width:150px;max-width:60%;border-radius:10px;border:1px solid var(--rp-border-strong);" /></div>` : ""}
-      ${trx.payment === "Tunai" && trx.cashReceived != null ? `
-      <div class="rp-receipt-row"><span>Uang tunai</span><strong class="rp-mono">${rupiah(trx.cashReceived)}</strong></div>
-      <div class="rp-kembalian-box" style="margin:8px 0;"><div class="rp-kembalian-label">Kembalian</div><div class="rp-kembalian-value">${rupiah(trx.change)}</div></div>` : ""}
       ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
       <div class="rp-receipt-line"></div>
       ${trx.discount ? `
       <div class="rp-receipt-row"><span>Subtotal</span><strong class="rp-mono">${rupiah(receiptSubtotal(trx))}</strong></div>
-      <div class="rp-receipt-row"><span>Diskon${trx.promoName ? ` (${esc(trx.promoName)})` : ""}</span><strong class="rp-mono" style="color:var(--rp-red);">- ${rupiah(trx.discount)}</strong></div>
-      <div class="rp-receipt-line"></div>` : ""}
+      <div class="rp-receipt-row"><span>Diskon${trx.promoName ? ` (${esc(trx.promoName)})` : ""}</span><strong class="rp-mono" style="color:var(--rp-red);">- ${rupiah(trx.discount)}</strong></div>` : ""}
       <div class="rp-receipt-row rp-receipt-total"><span>Total dibayar</span><strong class="rp-mono">${rupiah(trx.amount)}</strong></div>
+      ${trx.payment === "Tunai" && trx.cashReceived != null ? `
+      <div class="rp-receipt-row"><span>Uang tunai</span><strong class="rp-mono">${rupiah(trx.cashReceived)}</strong></div>
+      <div class="rp-kembalian-box" style="margin:8px 0;"><div class="rp-kembalian-label">Kembalian</div><div class="rp-kembalian-value">${rupiah(trx.change)}</div></div>` : ""}
     </div>
     <div id="receipt-save-customer">${isGuest ? `
       <p class="rp-dim" style="margin-top:12px;">${esc(trx.customerName)} belum jadi pelanggan terdaftar. Simpan ke daftar pelanggan?</p>
@@ -2317,15 +2316,15 @@ function buildReceiptWaMessage(trx) {
     `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
     `💳 Metode bayar: ${trx.payment}`,
     ...(trx.payment === "Transfer" && trx.bankAccount ? [`🏦 No. rekening: ${trx.bankAccount}`] : []),
-    ...(trx.payment === "Tunai" && trx.cashReceived != null ? [
-      `💵 Uang tunai: ${rupiah(trx.cashReceived)}`,
-      `🔁 Kembalian: ${rupiah(trx.change)}`,
-    ] : []),
     ...(trx.discount ? [
       `🧾 Subtotal: ${rupiah(receiptSubtotal(trx))}`,
       `🏷️ Diskon${trx.promoName ? ` (${trx.promoName})` : ""}: -${rupiah(trx.discount)}`,
     ] : []),
     `💰 Total: ${rupiah(trx.amount)}`,
+    ...(trx.payment === "Tunai" && trx.cashReceived != null ? [
+      `💵 Uang tunai: ${rupiah(trx.cashReceived)}`,
+      `🔁 Kembalian: ${rupiah(trx.change)}`,
+    ] : []),
     ``,
     `Mohon maaf kalau ada kekurangan pelayanan dari kami hari ini 🙏 Masukan dari Kakak selalu kami tunggu supaya bisa lebih baik lagi ke depannya.`,
     ``,
@@ -2344,6 +2343,10 @@ function buildReceiptWaMessage(trx) {
 // dokumen final dibuat dengan tinggi persis sepanjang isi struk + sedikit
 // margin — supaya hasilnya di-crop pas ke struknya aja, nggak ada sisa
 // area kosong panjang kayak kalau dipaksa ke ukuran kertas A4.
+// Baris dipisah jadi dua: `rows` (tampil SEBELUM baris TOTAL — termasu
+// subtotal & diskon, biar diskon nempel deket total) dan `afterTotalRows`
+// (tampil SESUDAH TOTAL — uang tunai & kembalian, karena itu bagian
+// pembayaran/kembalian, bukan rincian tagihan).
 function receiptPdfRows(trx) {
   const rows = [
     ["Tanggal", `${fmtDateID(trx.end)}, ${fmtTimeID(trx.end)}`],
@@ -2355,18 +2358,31 @@ function receiptPdfRows(trx) {
     ["Metode bayar", trx.payment],
   ];
   if (trx.payment === "Transfer" && trx.bankAccount) rows.push(["No. rekening", trx.bankAccount]);
-  if (trx.payment === "Tunai" && trx.cashReceived != null) {
-    rows.push(["Uang tunai", rupiah(trx.cashReceived)]);
-    rows.push(["Kembalian", rupiah(trx.change)]);
-  }
   if (trx.note) rows.push(["Catatan", trx.note]);
   if (trx.discount) {
     rows.push(["Subtotal", rupiah(receiptSubtotal(trx))]);
     rows.push([trx.promoName ? `Diskon (${trx.promoName})` : "Diskon", `- ${rupiah(trx.discount)}`]);
   }
-  return rows;
+  const afterTotalRows = [];
+  if (trx.payment === "Tunai" && trx.cashReceived != null) {
+    afterTotalRows.push(["Uang tunai", rupiah(trx.cashReceived)]);
+    afterTotalRows.push(["Kembalian", rupiah(trx.change)]);
+  }
+  return { rows, afterTotalRows };
 }
-function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
+function drawReceiptPdfRows(doc, rows, contentW, marginX, y) {
+  doc.setFontSize(9.5);
+  rows.forEach(([label, value]) => {
+    doc.setFont("courier", "normal");
+    const labelLines = doc.splitTextToSize(String(label), contentW * 0.42);
+    const valueLines = doc.splitTextToSize(String(value), contentW * 0.56);
+    doc.text(labelLines, marginX, y);
+    doc.text(valueLines, marginX + contentW, y, { align: "right" });
+    y += 5 * Math.max(labelLines.length, valueLines.length);
+  });
+  return y;
+}
+function drawReceiptPdfContent(doc, trx, rowsData, contentW, marginX) {
   const centerX = marginX + contentW / 2;
   let y = 10;
 
@@ -2387,15 +2403,7 @@ function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
   doc.setLineDashPattern([], 0);
   y += 6;
 
-  doc.setFontSize(9.5);
-  rows.forEach(([label, value]) => {
-    doc.setFont("courier", "normal");
-    const labelLines = doc.splitTextToSize(String(label), contentW * 0.42);
-    const valueLines = doc.splitTextToSize(String(value), contentW * 0.56);
-    doc.text(labelLines, marginX, y);
-    doc.text(valueLines, marginX + contentW, y, { align: "right" });
-    y += 5 * Math.max(labelLines.length, valueLines.length);
-  });
+  y = drawReceiptPdfRows(doc, rowsData.rows, contentW, marginX, y);
 
   y += 1.5;
   doc.setLineDashPattern([1, 1], 0);
@@ -2408,6 +2416,14 @@ function drawReceiptPdfContent(doc, trx, rows, contentW, marginX) {
   doc.text("TOTAL", marginX, y);
   doc.text(rupiah(trx.amount), marginX + contentW, y, { align: "right" });
   y += 9;
+
+  // Uang tunai & kembalian ditaruh SETELAH baris TOTAL (bagian pembayaran),
+  // bukan sebelum — biar urutannya: rincian tagihan -> total -> dibayar
+  // pakai berapa -> kembaliannya berapa. Persis alur struk kasir beneran.
+  if (rowsData.afterTotalRows.length) {
+    y = drawReceiptPdfRows(doc, rowsData.afterTotalRows, contentW, marginX, y);
+    y += 3;
+  }
 
   doc.setFont("courier", "normal");
   doc.setFontSize(9);
@@ -2484,10 +2500,11 @@ function printReceipt(trxId) {
     <h1>${esc(state.settings.businessName)}</h1>
     <div class="sub">${esc(trx.branchName || "")}</div>
     <div class="line"></div>
-    ${rows.map(([l, v]) => `<div class="row"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join("")}
+    ${rows.rows.map(([l, v]) => `<div class="row"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join("")}
     ${qrisBlock}
     <div class="line"></div>
     <div class="row total"><span>TOTAL</span><span>${rupiah(trx.amount)}</span></div>
+    ${rows.afterTotalRows.length ? rows.afterTotalRows.map(([l, v]) => `<div class="row"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join("") : ""}
     <div class="foot">Terima kasih!</div>
   </body></html>`);
   w.document.close();
@@ -2933,6 +2950,7 @@ function openConfirmModal(opts) {
   const iconName = opts.icon || (opts.danger === false ? null : "trash");
   openModal(modalShell(opts.title || "Konfirmasi", `
     <p style="margin:0;line-height:1.55;color:var(--rp-ink);">${esc(opts.message || "Yakin ingin melanjutkan aksi ini?")}</p>
+    ${opts.extraHtml || ""}
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="closeModal()">${esc(opts.cancelLabel || "Batal")}</button>
       <button class="rp-btn ${opts.danger === false ? "rp-btn-start" : "rp-btn-stop"}" onclick="runRpConfirmAction()">${iconName ? icon(iconName,14) : ""} ${esc(opts.confirmLabel || "Ya, lanjutkan")}</button>
@@ -3274,8 +3292,14 @@ function confirmFinish(unitId) {
   openConfirmModal({
     title: "Tutup transaksi ini?",
     message: payment === "Tunai"
-      ? `Sewa akan ditutup dengan total ${totalText} (Tunai). Uang diterima ${rupiah(cashReceived)}, kembalian ${rupiah(change)}. Setelah dicatat, transaksi ini tidak bisa diubah lagi.`
+      ? `Sewa akan ditutup dengan total ${totalText} (Tunai). Uang diterima ${rupiah(cashReceived)}. Setelah dicatat, transaksi ini tidak bisa diubah lagi.`
       : `Sewa akan ditutup dengan total ${totalText} (${payment}). Setelah dicatat, transaksi ini tidak bisa diubah lagi.`,
+    // Kembalian ditaruh di kotak besar & mencolok (sama kayak di form isi
+    // uang tunai & di struk) — biar kasir gampang lihat angka kembaliannya
+    // pas terakhir kali konfirmasi, bukan kesamar di tengah kalimat.
+    extraHtml: payment === "Tunai"
+      ? `<div class="rp-kembalian-box" style="margin-top:12px;"><div class="rp-kembalian-label">Kembalian</div><div class="rp-kembalian-value">${rupiah(change)}</div></div>`
+      : "",
     confirmLabel: "Ya, selesaikan",
     icon: "check",
     onConfirm: () => {
