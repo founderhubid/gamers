@@ -2,7 +2,7 @@
   "name": "Rental PS — Kasir Digital",
   "short_name": "Rental PS",
   "description": "Sistem kasir digital untuk rental PlayStation",
-  "start_url": "./index_ps__11_.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
