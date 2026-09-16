@@ -316,6 +316,15 @@
   .rp-receipt-line { border-top: 1px dashed var(--rp-border-strong); margin: 4px 0; }
   .rp-receipt-total { font-size: 15px; font-family: var(--rp-mono); }
 
+  /* Kotak "Kembalian" dibikin besar & mencolok, terpisah dari input uang
+     tunai — supaya kasir tidak salah baca/ketuker sama nominal uang bayar
+     atau total tagihan waktu buru-buru. */
+  .rp-kembalian-box { margin-top: -2px; padding: 14px 12px; border-radius: 12px; background: var(--rp-teal-tint); border: 1px solid var(--rp-teal); text-align: center; }
+  .rp-kembalian-box .rp-kembalian-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--rp-ink-dim); margin-bottom: 4px; }
+  .rp-kembalian-box .rp-kembalian-value { font-size: 32px; font-weight: 700; font-family: var(--rp-mono); color: var(--rp-teal); line-height: 1.15; }
+  .rp-kembalian-box.is-short { background: var(--rp-red-tint); border-color: var(--rp-red); }
+  .rp-kembalian-box.is-short .rp-kembalian-value { color: var(--rp-red); font-size: 26px; }
+
   .rp-chart-box { border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
   .rp-chart-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 12px; color: var(--rp-ink-dim); flex-wrap: wrap; }
   .rp-legend-item { display: flex; align-items: center; gap: 6px; }
@@ -1331,6 +1340,7 @@ body:before{
 <div id="toast" class="rp-toast" style="display:none;"></div>
 <div id="user-menu" class="rp-user-menu"></div>
 <input type="file" id="header-photo-file-input" accept="image/*" style="display:none">
+<input type="file" id="qris-file-input" accept="image/*" style="display:none" onchange="handleQrisImageFile(event)">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1790,7 +1800,12 @@ function normalize(raw) {
   let headerPhotos = (settingsRow.headerPhotos && typeof settingsRow.headerPhotos === "object") ? settingsRow.headerPhotos : {};
   headerPhotos = Object.fromEntries(Object.entries(headerPhotos).filter(([k, v]) => k && v).map(([k, v]) => [String(k), String(v)]));
 
-  const settings = { businessName, defaultRate, branches, cashiers, promos, admin, headerPhotos };
+  // QRIS (gambar) & no. rekening transfer usaha — ditampilkan ke kasir saat
+  // pelanggan bayar QRIS/Transfer, dan ikut dicatat ke struk transaksi.
+  const qrisImage = settingsRow.qrisImage ? String(settingsRow.qrisImage) : "";
+  const bankAccount = settingsRow.bankAccount ? String(settingsRow.bankAccount) : "";
+
+  const settings = { businessName, defaultRate, branches, cashiers, promos, admin, headerPhotos, qrisImage, bankAccount };
   return { settings, units, activeRentals, transactions, members, inventory, queue, expenses };
 }
 
@@ -1798,7 +1813,7 @@ function normalize(raw) {
    State
 ========================================================= */
 let state = {
-  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], promos: [], admin: { username: "admin", password: "admin123" }, headerPhotos: {} },
+  settings: { businessName: "Rental PS Saya", defaultRate: 5000, branches: [{id:"branch-main",name:"Cabang Utama"}], cashiers: [], promos: [], admin: { username: "admin", password: "admin123" }, headerPhotos: {}, qrisImage: "", bankAccount: "" },
   units: [], activeRentals: {}, transactions: [], members: [], inventory: [], queue: [], expenses: []
 };
 let currentTab = "dashboard";
@@ -2091,7 +2106,9 @@ function persistSettings() {
     promos: state.settings.promos || [],
     adminUsername: admin.username,
     adminPassword: admin.password,
-    headerPhotos: state.settings.headerPhotos || {}
+    headerPhotos: state.settings.headerPhotos || {},
+    qrisImage: state.settings.qrisImage || "",
+    bankAccount: state.settings.bankAccount || ""
   };
   apiSave("Settings", [row]);
 }
@@ -2187,6 +2204,11 @@ function finishRental(unitId, payment, discount, frozenMs, promoName, isFixed, c
     // "Uang tunai" & "Kembalian" di struk (modal, WA, PDF, & cetak).
     cashReceived: payment === "Tunai" ? cashReceived : null,
     change: payment === "Tunai" ? change : null,
+    // Snapshot no. rekening/QRIS usaha PADA SAAT transaksi dicatat — supaya
+    // kalau data usaha diganti belakangan, struk transaksi lama tetap
+    // menampilkan rekening/QRIS yang beneran dipakai waktu itu.
+    bankAccount: payment === "Transfer" ? (state.settings.bankAccount || "") : "",
+    qrisImage: payment === "QRIS" ? (state.settings.qrisImage || "") : "",
   };
   state.transactions.unshift(trx);
   delete state.activeRentals[unitId];
@@ -2229,9 +2251,11 @@ function openReceiptModal(trx) {
       <div class="rp-receipt-row"><span>Jam selesai</span><strong class="rp-mono">${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}</strong></div>
       <div class="rp-receipt-row"><span>Durasi</span><strong class="rp-mono">${fmtHMS(trx.minutes * 60000)}</strong></div>
       <div class="rp-receipt-row"><span>Metode bayar</span><strong>${esc(trx.payment)}</strong></div>
+      ${trx.payment === "Transfer" && trx.bankAccount ? `<div class="rp-receipt-row"><span>No. rekening</span><strong>${esc(trx.bankAccount)}</strong></div>` : ""}
+      ${trx.payment === "QRIS" && trx.qrisImage ? `<div style="text-align:center;margin:8px 0;"><img src="${esc(trx.qrisImage)}" alt="QRIS" style="width:150px;max-width:60%;border-radius:10px;border:1px solid var(--rp-border-strong);" /></div>` : ""}
       ${trx.payment === "Tunai" && trx.cashReceived != null ? `
       <div class="rp-receipt-row"><span>Uang tunai</span><strong class="rp-mono">${rupiah(trx.cashReceived)}</strong></div>
-      <div class="rp-receipt-row"><span>Kembalian</span><strong class="rp-mono">${rupiah(trx.change)}</strong></div>` : ""}
+      <div class="rp-kembalian-box" style="margin:8px 0;"><div class="rp-kembalian-label">Kembalian</div><div class="rp-kembalian-value">${rupiah(trx.change)}</div></div>` : ""}
       ${trx.note ? `<div class="rp-receipt-row"><span>Catatan</span><strong>${esc(trx.note)}</strong></div>` : ""}
       <div class="rp-receipt-line"></div>
       ${trx.discount ? `
@@ -2279,6 +2303,7 @@ function buildReceiptWaMessage(trx) {
     `🕑 Jam selesai: ${fmtTimeID(trx.endTimeDisplay != null ? trx.endTimeDisplay : trx.end)}`,
     `⏱️ Durasi: ${fmtHMS(trx.minutes * 60000)}`,
     `💳 Metode bayar: ${trx.payment}`,
+    ...(trx.payment === "Transfer" && trx.bankAccount ? [`🏦 No. rekening: ${trx.bankAccount}`] : []),
     ...(trx.payment === "Tunai" && trx.cashReceived != null ? [
       `💵 Uang tunai: ${rupiah(trx.cashReceived)}`,
       `🔁 Kembalian: ${rupiah(trx.change)}`,
@@ -2316,6 +2341,7 @@ function receiptPdfRows(trx) {
     ["Durasi", fmtHMS(trx.minutes * 60000)],
     ["Metode bayar", trx.payment],
   ];
+  if (trx.payment === "Transfer" && trx.bankAccount) rows.push(["No. rekening", trx.bankAccount]);
   if (trx.payment === "Tunai" && trx.cashReceived != null) {
     rows.push(["Uang tunai", rupiah(trx.cashReceived)]);
     rows.push(["Kembalian", rupiah(trx.change)]);
@@ -2427,6 +2453,9 @@ function printReceipt(trxId) {
   const w = window.open("", "_blank", "width=380,height=600");
   if (!w) { flash("Popup diblokir browser — izinkan popup buat cetak struk."); return; }
   const rows = receiptPdfRows(trx);
+  const qrisBlock = (trx.payment === "QRIS" && trx.qrisImage)
+    ? `<div style="text-align:center;margin:10px 0;"><img src="${esc(trx.qrisImage)}" style="width:150px;max-width:70%;" /></div>`
+    : "";
   w.document.write(`<!DOCTYPE html><html><head><title>Struk - ${esc(trx.unitName)}</title><style>
     @page{ margin: 8mm; }
     body{ font-family:'Courier New',monospace; font-size:12px; width:280px; margin:0 auto; padding:12px; color:#000; }
@@ -2443,6 +2472,7 @@ function printReceipt(trxId) {
     <div class="sub">${esc(trx.branchName || "")}</div>
     <div class="line"></div>
     ${rows.map(([l, v]) => `<div class="row"><span>${esc(l)}</span><span>${esc(v)}</span></div>`).join("")}
+    ${qrisBlock}
     <div class="line"></div>
     <div class="row total"><span>TOTAL</span><span>${rupiah(trx.amount)}</span></div>
     <div class="foot">Terima kasih!</div>
@@ -2835,8 +2865,22 @@ function openTrendPointModal(period, startMs, index) {
 /* =========================================================
    Modal
 ========================================================= */
-function closeModal() { document.getElementById("modal-root").innerHTML = ""; }
-function openModal(html) { document.getElementById("modal-root").innerHTML = html; }
+// Setiap kali modal berganti (ditutup atau dibuka modal lain), anggap popup
+// wajib "waktu habis" (kalau ada) sudah tidak tampil lagi & unit yang lagi
+// ditangani direset — biar enforceExpiredBlock() bisa mengevaluasi ulang
+// dengan bersih di tick berikutnya (munculin lagi kalau belum beres,
+// pindah ke modal lain kalau memang sedang legitimately ditangani).
+function closeModal() {
+  document.getElementById("modal-root").innerHTML = "";
+  window._expiredModalShownFor = null;
+  window._expiredResolvingUnit = null;
+  clearInterval(window._expiredBlockTick);
+}
+function openModal(html) {
+  document.getElementById("modal-root").innerHTML = html;
+  window._expiredModalShownFor = null;
+  clearInterval(window._expiredBlockTick);
+}
 
 function modalShell(title, bodyHtml) {
   return `
@@ -2845,6 +2889,18 @@ function modalShell(title, bodyHtml) {
       <div class="rp-modal-head"><h3>${esc(title)}</h3>
         <button class="rp-icon-btn" onclick="closeModal()">${icon("x",16)}</button>
       </div>
+      <div class="rp-modal-body">${bodyHtml}</div>
+    </div>
+  </div>`;
+}
+// Varian modal TANPA tombol X dan TANPA tutup-lewat-klik-backdrop — dipakai
+// khusus buat popup wajib (mis. waktu sewa habis) yang sengaja tidak boleh
+// diabaikan begitu saja oleh kasir.
+function modalShellBlocking(title, bodyHtml) {
+  return `
+  <div class="rp-modal-backdrop">
+    <div class="rp-modal" onclick="event.stopPropagation()">
+      <div class="rp-modal-head"><h3>${esc(title)}</h3></div>
       <div class="rp-modal-body">${bodyHtml}</div>
     </div>
   </div>`;
@@ -3091,27 +3147,45 @@ function toggleFinishCashField() {
   const wrap = document.getElementById("finish-cash-wrap");
   if (!sel || !wrap) return;
   if (sel.value === "Tunai") {
+    // Kembalian ditaruh di kotak besar & terpisah dari input "uang tunai" —
+    // biar kasir tidak ketuker antara nominal uang bayar & kembaliannya.
     wrap.innerHTML = `
       <label class="rp-field"><span>Uang tunai diterima (Rp)</span><input id="finish-cash" type="number" min="0" step="1000" placeholder="0" oninput="updateFinishChange()" /></label>
-      <div class="rp-receipt-row" style="margin-top:-4px;"><span>Kembalian</span><strong class="rp-mono" id="finish-change">${rupiah(0)}</strong></div>
+      <div class="rp-kembalian-box" id="finish-change-box">
+        <div class="rp-kembalian-label">Kembalian</div>
+        <div class="rp-kembalian-value" id="finish-change">${rupiah(0)}</div>
+      </div>
     `;
     updateFinishChange();
+  } else if (sel.value === "QRIS") {
+    const qris = state.settings.qrisImage;
+    wrap.innerHTML = qris
+      ? `<div class="rp-field"><span>Tunjukkan QRIS ini ke pelanggan</span>
+          <img src="${esc(qris)}" alt="QRIS" style="width:100%;max-width:240px;display:block;margin:8px auto 0;border-radius:10px;border:1px solid var(--rp-border-strong);" />
+        </div>`
+      : `<p class="rp-dim">Belum ada gambar QRIS tersimpan. Tambahkan lewat nama usaha di pojok kiri atas (klik nama usaha).</p>`;
+  } else if (sel.value === "Transfer") {
+    const rek = state.settings.bankAccount;
+    wrap.innerHTML = rek
+      ? `<div class="rp-receipt" style="text-align:center;"><div class="rp-receipt-row" style="justify-content:center;"><strong class="rp-mono" style="font-size:15px;">${esc(rek)}</strong></div></div><p class="rp-dim" style="margin:6px 0 0;">Beritahukan nomor rekening ini ke pelanggan untuk transfer.</p>`
+      : `<p class="rp-dim">Belum ada no. rekening tersimpan. Tambahkan lewat nama usaha di pojok kiri atas (klik nama usaha).</p>`;
   } else {
     wrap.innerHTML = "";
   }
 }
-// Hitung kembalian = uang tunai - total tagihan. Kalau uangnya kurang,
-// angkanya ditampilkan merah biar kasir sadar belum cukup (bukan kembalian
-// negatif yang membingungkan).
+// Hitung kembalian = uang tunai - total tagihan. Kalau uangnya kurang, kotak
+// besar ini berubah warna merah biar kasir sadar belum cukup (bukan
+// kembalian negatif yang membingungkan).
 function updateFinishChange() {
   const cashInput = document.getElementById("finish-cash");
   const changeEl = document.getElementById("finish-change");
+  const boxEl = document.getElementById("finish-change-box");
   if (!cashInput || !changeEl) return;
   const amount = computeFinishAmount();
   const cash = Number(cashInput.value) || 0;
   const change = cash - amount;
   changeEl.textContent = (change < 0 ? "Kurang " : "") + rupiah(Math.abs(change));
-  changeEl.style.color = change < 0 ? "var(--rp-red)" : "";
+  if (boxEl) boxEl.classList.toggle("is-short", change < 0);
 }
 // Dropdown promo hanya dimunculkan kalau cabang unit ini punya promo
 // terdaftar (dikelola admin di menu Cabang & Unit). Pilih tanpa promo tetap
@@ -3200,19 +3274,91 @@ function confirmFinish(unitId) {
 
 /* --------------------- Alarm & perpanjang waktu --------------------- */
 window._alertedUnits = window._alertedUnits || new Set();
+// Unit yang waktu sewanya SUDAH BENERAN HABIS (bukan cuma peringatan 10
+// menit sebelumnya) dan belum diselesaikan (bayar) atau diperpanjang.
+// Selama masih ada isinya, kasir "dipaksa" lewat popup wajib supaya
+// transaksi itu diberesin dulu sebelum bisa kerjain hal lain.
+window._expiredUnits = window._expiredUnits || new Set();
+// Unit yang lagi aktif ditangani kasir (modal Perpanjang/Selesai & Bayar
+// terbuka dari popup wajib) — dipakai supaya popup wajib tidak "menyela"
+// balik selagi kasir masih ngisi form itu.
+window._expiredResolvingUnit = window._expiredResolvingUnit || null;
+// Unit yang popup wajibnya SEDANG tampil di layar saat ini (dipakai buat
+// menghindari re-render tiap detik selagi popup yang sama masih terbuka).
+window._expiredModalShownFor = window._expiredModalShownFor || null;
 
 function checkRentalAlarms() {
   const now = Date.now();
+  // Bersihkan unit yang sudah tidak aktif lagi (sudah dibayar/diselesaikan)
+  // dari daftar "habis waktu" — kalau tidak, popup wajib bisa nyangkut.
+  Array.from(window._expiredUnits).forEach(id => { if (!state.activeRentals[id]) window._expiredUnits.delete(id); });
+
   Object.entries(state.activeRentals).forEach(([unitId, session]) => {
     if (!session.endTime) return;
     const remaining = session.endTime - now;
+    if (remaining <= 0) {
+      window._expiredUnits.add(unitId);
+      return;
+    }
+    window._expiredUnits.delete(unitId);
     if (remaining <= 10 * 60000 && !window._alertedUnits.has(unitId)) {
       window._alertedUnits.add(unitId);
       triggerRentalAlarm(unitId);
     }
   });
+  enforceExpiredBlock();
 }
 setInterval(checkRentalAlarms, 1000);
+
+// Paksa munculkan popup "waktu habis" (tidak bisa ditutup selain lewat
+// Perpanjang / Selesai & Bayar) untuk unit expired paling awal yang belum
+// ditangani. Dipanggil tiap detik — kalau kasir membatalkan modal
+// Perpanjang/Selesai tanpa menyelesaikannya, popup ini otomatis muncul
+// lagi 1 detik kemudian, jadi kasir tidak bisa kabur ke menu lain sebelum
+// transaksi itu beres.
+function enforceExpiredBlock() {
+  if (window._expiredUnits.size === 0) { window._expiredModalShownFor = null; return; }
+  if (window._expiredResolvingUnit && window._expiredUnits.has(window._expiredResolvingUnit)) return;
+  const nextUnitId = window._expiredUnits.values().next().value;
+  if (window._expiredModalShownFor === nextUnitId) return;
+  openExpiredBlockModal(nextUnitId);
+}
+// Dipanggil dari tombol "Perpanjang" / "Selesai & Bayar" di popup wajib —
+// menandai unit ini sedang ditangani supaya popup tidak menyela balik
+// selagi kasir mengisi form perpanjangan/pembayaran.
+function resolveExpiredExtend(unitId) {
+  window._expiredResolvingUnit = unitId;
+  openExtendModal(unitId);
+}
+function resolveExpiredFinish(unitId) {
+  window._expiredResolvingUnit = unitId;
+  openFinishModal(unitId);
+}
+function openExpiredBlockModal(unitId) {
+  const unit = state.units.find(u => u.id === unitId);
+  const session = state.activeRentals[unitId];
+  if (!unit || !session || !session.endTime) { window._expiredUnits.delete(unitId); return; }
+  clearInterval(window._alarmTick);
+  clearInterval(window._expiredBlockTick);
+  playAlarmBeep();
+  openModal(modalShellBlocking(`⏰ Waktu sewa habis — ${esc(unit.name)}`, `
+    <div class="rp-receipt">
+      <div class="rp-receipt-row"><span>Penyewa</span><strong>${esc(session.customerName)}</strong></div>
+      <div class="rp-receipt-row"><span>Terlambat</span><strong class="rp-mono rp-timer is-over" id="expired-elapsed">${fmtHMS(Math.abs(session.endTime - Date.now()))}</strong></div>
+    </div>
+    <p class="rp-sub"><strong>Waktu sewa unit ini sudah habis.</strong> Selesaikan dulu transaksi ini (perpanjang atau bayar) sebelum lanjut kerjain yang lain.</p>
+    <div class="rp-modal-foot" style="justify-content:space-between;">
+      <button class="rp-btn rp-btn-ghost" onclick="resolveExpiredExtend('${unitId}')">${icon("history",14)} Perpanjang</button>
+      <button class="rp-btn rp-btn-stop" onclick="resolveExpiredFinish('${unitId}')">${icon("stop",14)} Selesai &amp; Bayar</button>
+    </div>
+  `));
+  window._expiredModalShownFor = unitId;
+  window._expiredBlockTick = setInterval(() => {
+    const el = document.getElementById("expired-elapsed");
+    if (!el) { clearInterval(window._expiredBlockTick); return; }
+    el.textContent = fmtHMS(Math.abs(session.endTime - Date.now()));
+  }, 1000);
+}
 
 function playAlarmBeep() {
   try {
@@ -3438,8 +3584,23 @@ function renderSyncDot() {
 }
 
 function openBrandRenameModal() {
-  openModal(modalShell("Ganti nama usaha", `
-    <label class="rp-field"><span>Nama usaha</span><input id="brand-rename-input" value="${esc(state.settings.businessName)}" autocomplete="off"></label>
+  const s = state.settings;
+  openModal(modalShell("Pengaturan usaha", `
+    <label class="rp-field"><span>Nama usaha</span><input id="brand-rename-input" value="${esc(s.businessName)}" autocomplete="off"></label>
+    <label class="rp-field"><span>No. rekening / e-wallet transfer</span><input id="brand-bank-input" value="${esc(s.bankAccount || "")}" placeholder="cth: BCA 1234567890 a.n. Budi" autocomplete="off"></label>
+    <div class="rp-field">
+      <span>QRIS pembayaran</span>
+      ${s.qrisImage ? `
+        <img src="${esc(s.qrisImage)}" alt="QRIS" style="width:100%;max-width:220px;border-radius:10px;border:1px solid var(--rp-border-strong);margin:6px 0;" />
+        <div class="rp-field-row">
+          <button type="button" class="rp-btn rp-btn-ghost" style="flex:1" onclick="triggerQrisPicker()">Ganti gambar</button>
+          <button type="button" class="rp-btn rp-btn-ghost" style="flex:1" onclick="removeQrisImage()">Hapus</button>
+        </div>
+      ` : `
+        <button type="button" class="rp-btn rp-btn-ghost" style="width:100%;margin-top:6px;" onclick="triggerQrisPicker()">${icon("upload",14)} Unggah gambar QRIS</button>
+      `}
+      <p class="rp-dim" style="margin:4px 0 0;font-size:11.5px;">No. rekening & QRIS ini otomatis ditampilkan ke kasir saat pelanggan bayar Transfer/QRIS, dan ikut dicatat di struk.</p>
+    </div>
     <div class="rp-modal-foot">
       <button class="rp-btn rp-btn-ghost" onclick="closeModal()">Batal</button>
       <button class="rp-btn rp-btn-start" onclick="submitBrandRename()">Simpan</button>
@@ -3449,10 +3610,41 @@ function openBrandRenameModal() {
 function submitBrandRename() {
   const v = (document.getElementById("brand-rename-input").value || "").trim();
   if (!v) { flash("Nama usaha wajib diisi."); return; }
-  saveBusinessName(v);
+  state.settings.businessName = v;
+  state.settings.bankAccount = (document.getElementById("brand-bank-input")?.value || "").trim();
+  persistSettings();
   closeModal();
   renderAll();
-  flash("Nama usaha diperbarui.");
+  flash("Pengaturan usaha diperbarui.");
+}
+// ---- Upload gambar QRIS (ditampilkan ke kasir + dicatat di struk) ----
+function triggerQrisPicker() {
+  const inp = document.getElementById("qris-file-input");
+  if (inp) inp.click();
+}
+async function handleQrisImageFile(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { flash("File harus berupa gambar."); return; }
+  if (file.size > 5 * 1024 * 1024) { flash("Ukuran gambar maksimal 5MB."); return; }
+  flash("Mengunggah QRIS…");
+  try {
+    const url = await uploadToCloudinary(file);
+    state.settings.qrisImage = url;
+    persistSettings();
+    openBrandRenameModal();
+    flash("QRIS berhasil diunggah.");
+  } catch (err) {
+    console.error(err);
+    flash("Gagal upload QRIS: " + (err && err.message ? err.message : "cek koneksi internet."));
+  }
+}
+function removeQrisImage() {
+  state.settings.qrisImage = "";
+  persistSettings();
+  openBrandRenameModal();
+  flash("QRIS dihapus.");
 }
 
 function renderAll() {
