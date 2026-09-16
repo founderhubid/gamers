@@ -4148,6 +4148,7 @@ function removePromoDirect(id){
 function renderRiwayat() {
   const visibleTx = getVisibleTransactions();
   const total = visibleTx.reduce((a,t)=>a+t.amount,0);
+  const totalDiscount = visibleTx.reduce((a,t)=>a+(t.discount||0),0);
   const rows = visibleTx.map((t, i) => `
     <tr data-name="${esc((t.unitName+" "+t.customerName).toLowerCase())}">
       <td class="rp-mono rp-td-no">${i+1}</td>
@@ -4156,6 +4157,7 @@ function renderRiwayat() {
       <td>${esc(t.unitName)}</td>
       <td>${esc(t.customerName)}</td>
       <td class="rp-mono">${t.minutes} mnt</td>
+      <td class="rp-mono">${t.discount ? `<span style="color:var(--rp-red);">- ${rupiah(t.discount)}</span>${t.promoName ? `<span class="rp-dim" style="display:block;font-size:10px;">${esc(t.promoName)}</span>` : ""}` : `<span class="rp-dim">-</span>`}</td>
       <td class="rp-mono">${rupiah(t.amount)}</td>
       <td>${esc(t.payment)}</td>
     </tr>`).join("");
@@ -4164,14 +4166,14 @@ function renderRiwayat() {
       ${pageHeaderBanner({
         key: "riwayat",
         title: "Riwayat Sewa",
-        subtitle: `${visibleTx.length} transaksi · total ${rupiah(total)}`,
+        subtitle: `${visibleTx.length} transaksi · total ${rupiah(total)}${totalDiscount ? ` · total diskon ${rupiah(totalDiscount)}` : ""}`,
         subtitleId: "riwayat-count",
         tools: `<div class="rp-search">${icon("search",14)}<input id="riwayat-search" placeholder="Cari unit / nama…" /></div>
           <button class="rp-btn rp-btn-ghost" onclick="exportRiwayatCSV()" ${!state.transactions.length?"disabled":""}>${icon("download",14)} Ekspor Excel</button>`
       })}
       <div class="rp-table-wrap"><table class="rp-table" id="riwayat-table">
-        <thead><tr><th class="rp-th-no">No</th><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th><th>Bayar</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="8">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
+        <thead><tr><th class="rp-th-no">No</th><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Diskon</th><th>Total</th><th>Bayar</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="9">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
       </table></div>
     </div>`;
 }
@@ -4550,6 +4552,28 @@ function renderLaporan() {
     byPaymentMap[key].total += t.amount;
   });
   const byPayment = Object.entries(byPaymentMap).sort((a,b) => b[1].total - a[1].total);
+
+  // --- Efektivitas Promo/Diskon ---
+  const totalDiscount = periodTx.reduce((a,t) => a+(t.discount||0), 0);
+  const grossRevenue = totalRevenue + totalDiscount;
+  const discountPct = grossRevenue > 0 ? (totalDiscount / grossRevenue * 100) : 0;
+  const promoTx = periodTx.filter(t => t.discount);
+  const nonPromoTx = periodTx.filter(t => !t.discount);
+  const promoTxCount = promoTx.length;
+  const promoTxPct = totalTx ? (promoTxCount / totalTx * 100) : 0;
+  const avgDiscountPerPromoTx = promoTxCount ? totalDiscount / promoTxCount : 0;
+  const byPromoMap = {};
+  promoTx.forEach(t => {
+    const key = t.promoName || '(Tanpa nama promo)';
+    if (!byPromoMap[key]) byPromoMap[key] = { count: 0, total: 0 };
+    byPromoMap[key].count += 1;
+    byPromoMap[key].total += (t.discount || 0);
+  });
+  const byPromo = Object.entries(byPromoMap).sort((a,b) => b[1].total - a[1].total);
+  const avgSubtotalPromo = promoTxCount ? promoTx.reduce((a,t) => a+receiptSubtotal(t), 0) / promoTxCount : 0;
+  const avgSubtotalNonPromo = nonPromoTx.length ? nonPromoTx.reduce((a,t) => a+receiptSubtotal(t), 0) / nonPromoTx.length : 0;
+  const subtotalDiffPct = avgSubtotalNonPromo > 0 ? ((avgSubtotalPromo - avgSubtotalNonPromo) / avgSubtotalNonPromo * 100) : 0;
+
   const trend = buildLaporanTrend(period, start, laporanBid);
   const prevMonthLabel = new Date(trend.prevYear, trend.prevMonth, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
   const chartTitle = `Tren pendapatan harian — ${selected.label.replace('Bulan terpilih (','').replace(')','')}`;
@@ -4618,6 +4642,32 @@ function renderLaporan() {
           <thead><tr><th class="rp-th-no">No</th><th>Metode</th><th>Jumlah transaksi</th><th>Total nominal</th></tr></thead>
           <tbody>${byPayment.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${rupiah(d.total)}</td></tr>`).join('')}</tbody>
         </table></div>`}
+
+      <div class="rp-ruled-head">Efektivitas promo/diskon <span class="rp-dim" style="text-transform:none;letter-spacing:normal;">— seberapa sering & seberapa besar diskon dikasih ke pelanggan</span></div>
+      ${totalDiscount === 0 ? emptyState('Belum ada diskon/promo dipakai pada bulan terpilih.') : `
+        <div class="rp-stat-row">
+          <div class="rp-stat-card"><span class="rp-stat-label">Total diskon diberikan</span><strong class="rp-mono rp-stat-value" style="color:var(--rp-red);">${rupiah(totalDiscount)}</strong></div>
+          <div class="rp-stat-card"><span class="rp-stat-label">% dari pendapatan kotor</span><strong class="rp-mono rp-stat-value">${discountPct.toFixed(1)}%</strong></div>
+          <div class="rp-stat-card"><span class="rp-stat-label">Transaksi pakai promo</span><strong class="rp-mono rp-stat-value">${promoTxCount} dari ${totalTx}</strong><span class="rp-dim" style="display:block;margin-top:5px;font-size:10.5px;">${promoTxPct.toFixed(1)}% dari total transaksi</span></div>
+          <div class="rp-stat-card"><span class="rp-stat-label">Rata-rata diskon/transaksi</span><strong class="rp-mono rp-stat-value">${rupiah(avgDiscountPerPromoTx)}</strong></div>
+        </div>
+
+        <div class="rp-ruled-head" style="margin-top:22px;">Rincian per promo</div>
+        <div class="rp-table-wrap"><table class="rp-table">
+          <thead><tr><th class="rp-th-no">No</th><th>Nama promo</th><th>Dipakai</th><th>Total diskon</th><th>Rata-rata diskon</th></tr></thead>
+          <tbody>${byPromo.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}x</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
+        </table></div>
+
+        <div class="rp-ruled-head" style="margin-top:22px;">Perbandingan nilai transaksi <span class="rp-dim" style="text-transform:none;letter-spacing:normal;">— pakai promo vs tidak, sebelum dipotong diskon</span></div>
+        <div class="rp-stat-row">
+          <div class="rp-stat-card"><span class="rp-stat-label">Rata-rata transaksi pakai promo</span><strong class="rp-mono rp-stat-value">${rupiah(avgSubtotalPromo)}</strong></div>
+          <div class="rp-stat-card"><span class="rp-stat-label">Rata-rata transaksi tanpa promo</span><strong class="rp-mono rp-stat-value">${rupiah(avgSubtotalNonPromo)}</strong></div>
+          <div class="rp-stat-card">
+            <span class="rp-stat-label">Selisih</span>
+            <strong class="rp-mono rp-stat-value" style="color:${subtotalDiffPct>=0?'var(--rp-navy)':'var(--rp-red)'};">${subtotalDiffPct>=0?'▲':'▼'} ${Math.abs(subtotalDiffPct).toFixed(1)}%</strong>
+            <span class="rp-dim" style="display:block;margin-top:5px;font-size:10.5px;">${nonPromoTx.length===0 ? 'belum ada transaksi tanpa promo untuk dibandingkan' : (subtotalDiffPct>=0 ? 'promo dipakai di transaksi bernilai lebih besar — indikasi promo mendorong belanja lebih' : 'transaksi pakai promo justru lebih kecil — diskon lebih ke motong margin')}</span>
+          </div>
+        </div>`}
     </div>`;
 }
 
@@ -4625,7 +4675,7 @@ function exportLabaRugiCSV() {
   const data = window._labaRugiExport;
   if (!data || (!data.periodTx.length && !data.periodExpenses.length)) { flash("Tidak ada data untuk diekspor."); return; }
   const rows = [
-    ...data.periodTx.map(t => ({ Tanggal: fmtDateID(t.end), Jenis: "Pendapatan", Cabang: t.branchName || getBranchName(t.branchId), Kategori: "Sewa " + t.unitName, Deskripsi: t.customerName, "Jumlah (Rp)": t.amount })),
+    ...data.periodTx.map(t => ({ Tanggal: fmtDateID(t.end), Jenis: "Pendapatan", Cabang: t.branchName || getBranchName(t.branchId), Kategori: "Sewa " + t.unitName, Deskripsi: t.customerName, "Subtotal (Rp)": receiptSubtotal(t), Promo: t.promoName || "", "Diskon (Rp)": t.discount || 0, "Jumlah (Rp)": t.amount })),
     ...data.periodExpenses.map(e => ({ Tanggal: fmtDateID(e.date), Jenis: "Pengeluaran", Cabang: e.branchName || getBranchName(e.branchId), Kategori: e.category, Deskripsi: e.description || "-", "Jumlah (Rp)": -e.amount })),
     { Tanggal: "", Jenis: "", Kategori: "", Deskripsi: "TOTAL PENDAPATAN", "Jumlah (Rp)": data.totalRevenue },
     { Tanggal: "", Jenis: "", Kategori: "", Deskripsi: "TOTAL PENGELUARAN", "Jumlah (Rp)": -data.totalExpense },
@@ -4639,7 +4689,8 @@ function exportLaporanCSV() {
   const period = window._laporanExportPeriod || "bulan";
   downloadXLSX(`laporan-${period}.xlsx`, tx.map(t => ({
     Tanggal: fmtDateID(t.end), Jam: fmtTimeID(t.end), Cabang: t.branchName || getBranchName(t.branchId), Unit: t.unitName, Penyewa: t.customerName,
-    "Durasi (menit)": t.minutes, "Total (Rp)": t.amount, Pembayaran: t.payment,
+    "Durasi (menit)": t.minutes, "Subtotal (Rp)": receiptSubtotal(t), Promo: t.promoName || "", "Diskon (Rp)": t.discount || 0,
+    "Total (Rp)": t.amount, Pembayaran: t.payment,
   })), "Laporan");
 }
 
