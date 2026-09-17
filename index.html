@@ -367,6 +367,29 @@
     .rp-insight-text { font-size: 12px; }
   }
 
+  /* Pagination tabel — dipakai di semua tabel yang dibatasi 10 baris/halaman. */
+  .rp-pagination {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 10px; padding: 10px 2px 4px;
+  }
+  .rp-pagination-info { font-size: 12px; color: var(--rp-ink-dim); }
+  .rp-pagination-info strong { color: var(--rp-ink); font-family: var(--rp-mono); font-weight: 700; }
+  .rp-pagination-controls { display: flex; align-items: center; gap: 8px; }
+  .rp-pagination-btn {
+    font-family: var(--rp-mono); font-size: 12px; font-weight: 600; padding: 6px 12px;
+    border-radius: 7px; border: 1px solid var(--rp-border); background: var(--rp-surface-2);
+    color: var(--rp-ink); cursor: pointer; transition: background .15s ease, opacity .15s ease;
+  }
+  .rp-pagination-btn:hover:not(:disabled) { background: var(--rp-hover-tint); }
+  .rp-pagination-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .rp-pagination-select {
+    font-family: var(--rp-sans); font-size: 12.5px; color: var(--rp-ink); border: 1px solid var(--rp-border);
+    border-radius: 7px; padding: 6px 8px; background: var(--rp-input-bg);
+  }
+  @media (max-width: 720px) {
+    .rp-pagination { flex-direction: column; align-items: flex-start; }
+  }
+
   .rp-chart-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 12px; color: var(--rp-ink-dim); flex-wrap: wrap; }
   .rp-legend-item { display: flex; align-items: center; gap: 6px; }
   .rp-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
@@ -2765,15 +2788,17 @@ function maybeNotifyQueueForUnit(unitId, unitName) {
   }, 700);
 }
 function openQueueModal(prefUnitId) {
+  window._modalReopen = () => openQueueModal(prefUnitId);
   const visibleUnits = getVisibleUnits();
   const unitOptions = `<option value="">Unit apapun (fleksibel)</option>` + visibleUnits.map(u => `<option value="${u.id}" ${prefUnitId===u.id?"selected":""}>${esc(u.name)}</option>`).join("");
   const availableUnits = visibleUnits.filter(u => u.status === "available");
   const branchQueue = getVisibleQueue();
-  const rows = branchQueue.map((q, i) => {
+  const queuePg = paginateRows('modal-queue', branchQueue);
+  const rows = queuePg.pageRows.map((q, i) => {
     const unitName = q.unitId ? ((state.units.find(u => u.id === q.unitId) || {}).name || "-") : "Unit apapun";
     const assignOptions = availableUnits.map(u => `<option value="${u.id}" ${u.id===q.unitId?"selected":""}>${esc(u.name)}</option>`).join("");
     return `<tr>
-      <td class="rp-mono rp-td-no">${i+1}</td>
+      <td class="rp-mono rp-td-no">${queuePg.startIdx+i+1}</td>
       <td>${esc(q.customerName)}${q.note ? `<div class="rp-dim">${esc(q.note)}</div>` : ""}</td>
       <td>${esc(q.phone || "-")}</td>
       <td>${esc(unitName)}</td>
@@ -2797,6 +2822,7 @@ function openQueueModal(prefUnitId) {
       <thead><tr><th class="rp-th-no">No</th><th>Nama</th><th>HP</th><th>Unit diminta</th><th>Waktu</th><th></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="6">${emptyState("Belum ada antrian.")}</td></tr>`}</tbody>
     </table></div>
+    ${paginationHtml('modal-queue', queuePg.page, queuePg.totalPages, queuePg.totalItems)}
   `));
 }
 
@@ -2804,29 +2830,36 @@ function openQueueModal(prefUnitId) {
    Detail modal — Dashboard & Laporan (klik kartu/chart)
 ========================================================= */
 function openDashTxModal() {
+  window._modalReopen = () => openDashTxModal();
   const todayStr = nowJakarta().toDateString();
   const todayTx = getVisibleTransactions().filter(t => toJakarta(t.end).toDateString() === todayStr);
   const total = todayTx.reduce((a,t) => a+t.amount, 0);
-  const rows = todayTx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const txPg = paginateRows('modal-dash-tx', todayTx);
+  const rows = txPg.pageRows.map((t, i) => `<tr><td class="rp-mono rp-td-no">${txPg.startIdx+i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell("Transaksi hari ini", `
     <p class="rp-sub">${todayTx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
       <thead><tr><th class="rp-th-no">No</th><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada transaksi hari ini.")}</td></tr>`}</tbody>
     </table></div>
+    ${paginationHtml('modal-dash-tx', txPg.page, txPg.totalPages, txPg.totalItems)}
   `));
 }
 function openDashActiveUnitsModal() {
-  const rows = getVisibleUnits().filter(u => u.status === "active" && state.activeRentals[u.id]).map((u, i) => {
+  window._modalReopen = () => openDashActiveUnitsModal();
+  const activeUnits = getVisibleUnits().filter(u => u.status === "active" && state.activeRentals[u.id]);
+  const activePg = paginateRows('modal-dash-active', activeUnits);
+  const rows = activePg.pageRows.map((u, i) => {
     const s = state.activeRentals[u.id];
     const elapsed = Date.now() - s.startTime;
-    return `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(u.name)}</td><td>${esc(s.customerName)}</td><td class="rp-mono">${fmtHMS(elapsed)}</td><td>${esc(s.note || "-")}</td></tr>`;
+    return `<tr><td class="rp-mono rp-td-no">${activePg.startIdx+i+1}</td><td>${esc(u.name)}</td><td>${esc(s.customerName)}</td><td class="rp-mono">${fmtHMS(elapsed)}</td><td>${esc(s.note || "-")}</td></tr>`;
   }).join("");
   openModal(modalShell("Unit sedang disewa", `
     <div class="rp-table-wrap"><table class="rp-table">
       <thead><tr><th class="rp-th-no">No</th><th>Unit</th><th>Penyewa</th><th>Berjalan</th><th>Catatan</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="5">${emptyState("Tidak ada unit yang sedang disewa.")}</td></tr>`}</tbody>
     </table></div>
+    ${paginationHtml('modal-dash-active', activePg.page, activePg.totalPages, activePg.totalItems)}
   `));
 }
 function openUnitDetailModal(unitId) {
@@ -2871,11 +2904,13 @@ function openMaintModal(unitId) {
   `));
 }
 function openLaporanDetailModal(type) {
+  window._modalReopen = () => openLaporanDetailModal(type);
   const tx = window._laporanExportTx || [];
   const period = "bulan";
   let periodLbl = window._laporanExportLabel || getSelectedLaporanRange().label;
   const showBranchCol = getLaporanBranchId() === "ALL";
-  let title = "Rincian", theadRow = "", bodyRows = "", colCount = 5;
+  let title = "Rincian", theadRow = "", bodyRows = "", colCount = 5, pg;
+  const tableId = 'modal-laporan-detail-' + type;
   if (type === "duration") {
     title = "Rincian durasi per unit";
     const byUnitMap = {};
@@ -2888,13 +2923,15 @@ function openLaporanDetailModal(type) {
     });
     colCount = showBranchCol ? 5 : 4;
     theadRow = `<tr><th class="rp-th-no">No</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th></tr>`;
-    bodyRows = Object.entries(byUnitMap).sort((a,b) => b[1].minutes - a[1].minutes)
-      .map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:""}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
+    const sortedEntries = Object.entries(byUnitMap).sort((a,b) => b[1].minutes - a[1].minutes);
+    pg = paginateRows(tableId, sortedEntries);
+    bodyRows = pg.pageRows.map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${pg.startIdx+i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:""}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td></tr>`).join("");
   } else {
     title = type === "revenue" ? "Rincian pendapatan" : type === "count" ? "Rincian jumlah sewa" : "Rincian rata-rata per sewa";
     colCount = showBranchCol ? 7 : 6;
     theadRow = `<tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?"<th>Cabang</th>":""}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr>`;
-    bodyRows = tx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:""}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+    pg = paginateRows(tableId, tx);
+    bodyRows = pg.pageRows.map((t, i) => `<tr><td class="rp-mono rp-td-no">${pg.startIdx+i+1}</td><td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:""}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   }
   openModal(modalShell(title, `
     <p class="rp-sub">${esc(periodLbl)}</p>
@@ -2902,10 +2939,12 @@ function openLaporanDetailModal(type) {
       <thead>${theadRow}</thead>
       <tbody>${bodyRows || `<tr><td colspan="${colCount}">${emptyState("Belum ada data pada periode ini.")}</td></tr>`}</tbody>
     </table></div>
+    ${paginationHtml(tableId, pg.page, pg.totalPages, pg.totalItems)}
   `));
 }
 function openTrendPointModal(period, startMs, index) {
   window._trendMobileIndex = null;
+  window._modalReopen = () => openTrendPointModal(period, startMs, index);
 
   const start = new Date(startMs);
   let rangeStart, rangeEnd, label;
@@ -2928,13 +2967,15 @@ function openTrendPointModal(period, startMs, index) {
   }
   const tx = state.transactions.filter(t => { const jt = toJakarta(t.end).getTime(); return jt >= rangeStart && jt <= rangeEnd; });
   const total = tx.reduce((a,t) => a+t.amount, 0);
-  const rows = tx.map((t, i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
+  const trendPg = paginateRows('modal-trend-point', tx);
+  const rows = trendPg.pageRows.map((t, i) => `<tr><td class="rp-mono rp-td-no">${trendPg.startIdx+i+1}</td><td>${fmtTimeID(t.end)}</td><td>${esc(t.branchName || getBranchName(t.branchId))}</td><td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${t.minutes} mnt</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("");
   openModal(modalShell(`Rincian — ${label}`, `
     <p class="rp-sub">${tx.length} transaksi · total ${rupiah(total)}</p>
     <div class="rp-table-wrap"><table class="rp-table">
       <thead><tr><th class="rp-th-no">No</th><th>Jam</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Total</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="7">${emptyState("Tidak ada transaksi pada tanggal ini.")}</td></tr>`}</tbody>
     </table></div>
+    ${paginationHtml('modal-trend-point', trendPg.page, trendPg.totalPages, trendPg.totalItems)}
   `));
 }
 
@@ -2950,6 +2991,7 @@ function closeModal() {
   document.getElementById("modal-root").innerHTML = "";
   window._expiredModalShownFor = null;
   window._expiredResolvingUnit = null;
+  window._modalReopen = null;
   clearInterval(window._expiredBlockTick);
 }
 function openModal(html) {
@@ -3979,16 +4021,19 @@ async function submitBranch(id){
 function renderUnits() {
   const branch = getBranchName(ensureSelectedBranch());
   const visibleUnits = getVisibleUnits();
-  const rows = visibleUnits.map((u, i) => `
-    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(u.name)}</td><td>${esc(u.branchName || branch)}</td><td class="rp-mono">${rupiah(u.rate)}</td>
+  const unitsPg = paginateRows('units-list', visibleUnits);
+  const rows = unitsPg.pageRows.map((u, i) => `
+    <tr><td class="rp-mono rp-td-no">${unitsPg.startIdx+i+1}</td><td>${esc(u.name)}</td><td>${esc(u.branchName || branch)}</td><td class="rp-mono">${rupiah(u.rate)}</td>
       <td><span class="rp-stamp rp-stamp-${u.status} rp-stamp-inline">${u.status==="available"?"Kosong":u.status==="active"?"Disewa":"Servis"}</span></td>
       <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openUnitModal('${u.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn" onclick="toggleMaint('${u.id}')" ${u.status==="active"?"disabled":""} title="Servis">${icon("wrench",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeUnit('${u.id}')" ${state.activeRentals[u.id]?"disabled":""} title="Hapus">${icon("trash",15)}</button>
       </div></td></tr>`).join("");
-  const branchRows = getBranches().map((b, i) => `
-    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(b.name)}</td><td class="rp-mono">${state.units.filter(u=>u.branchId===b.id).length}</td>
+  const branches = getBranches();
+  const branchesPg = paginateRows('units-branches', branches);
+  const branchRows = branchesPg.pageRows.map((b, i) => `
+    <tr><td class="rp-mono rp-td-no">${branchesPg.startIdx+i+1}</td><td>${esc(b.name)}</td><td class="rp-mono">${state.units.filter(u=>u.branchId===b.id).length}</td>
       <td class="rp-td-actions"><div class="rp-row-actions"><button class="rp-icon-btn" onclick="openBranchModal('${b.id}')" title="Ubah">${icon("pencil",15)}</button>
       <button class="rp-icon-btn rp-icon-danger" onclick="removeBranch('${b.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("");
   return `<div class="rp-page">
@@ -4003,7 +4048,8 @@ function renderUnits() {
     <span class="rp-branch-tag">${visibleUnits.length} unit di cabang ini</span></div>
     <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Unit</th><th>Cabang</th><th>Tarif/jam</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows||`<tr><td colspan="6">${emptyState("Belum ada unit pada cabang ini.")}</td></tr>`}</tbody></table></div>
-    ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>`:""}
+    ${paginationHtml('units-list', unitsPg.page, unitsPg.totalPages, unitsPg.totalItems)}
+    ${isAdmin()?`<div class="rp-ruled-head">Daftar cabang</div><div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Cabang</th><th>Jumlah unit</th><th></th></tr></thead><tbody>${branchRows}</tbody></table></div>${paginationHtml('units-branches', branchesPg.page, branchesPg.totalPages, branchesPg.totalItems)}`:""}
     ${isAdmin()?renderCashierSection():""}
     ${isAdmin()?renderPromoSection():""}
     ${isAdmin()?renderAdminSection():""}
@@ -4052,8 +4098,9 @@ function submitAdminAccount(){
 /* --------------------- Akun kasir per cabang --------------------- */
 function renderCashierSection(){
   const cashiers = getCashiers();
-  const rows = cashiers.map((c, i) => `
-    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(c.username)}</td><td class="rp-mono">${esc(c.password)}</td><td>${esc(getBranchName(c.branchId))}</td>
+  const cashiersPg = paginateRows('units-cashiers', cashiers);
+  const rows = cashiersPg.pageRows.map((c, i) => `
+    <tr><td class="rp-mono rp-td-no">${cashiersPg.startIdx+i+1}</td><td>${esc(c.username)}</td><td class="rp-mono">${esc(c.password)}</td><td>${esc(getBranchName(c.branchId))}</td>
       <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openCashierModal('${c.id}')" title="Ubah">${icon("pencil",15)}</button>
         <button class="rp-icon-btn rp-icon-danger" onclick="removeCashier('${c.id}')" title="Hapus">${icon("trash",15)}</button>
@@ -4064,7 +4111,7 @@ function renderCashierSection(){
     <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Setiap akun kasir hanya bisa login dan melihat data cabang yang dipilih di sini.</p>
     <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openCashierModal('')">${icon("plus",14)} Tambah akun kasir</button></div>
     ${fallbackNote}
-    ${cashiers.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Username</th><th>Password</th><th>Cabang</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    ${cashiers.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Username</th><th>Password</th><th>Cabang</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${paginationHtml('units-cashiers', cashiersPg.page, cashiersPg.totalPages, cashiersPg.totalItems)}` : ""}
   `;
 }
 function openCashierModal(id){
@@ -4120,8 +4167,9 @@ function removeCashierDirect(id){
 // bisa diubah manual), dan namanya ikut tercatat di struk pembayaran.
 function renderPromoSection(){
   const promos = getPromos();
-  const rows = promos.map((p, i) => `
-    <tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(p.name)}</td><td>${esc(getBranchName(p.branchId))}</td>
+  const promosPg = paginateRows('units-promos', promos);
+  const rows = promosPg.pageRows.map((p, i) => `
+    <tr><td class="rp-mono rp-td-no">${promosPg.startIdx+i+1}</td><td>${esc(p.name)}</td><td>${esc(getBranchName(p.branchId))}</td>
       <td class="rp-mono">${esc(formatPromoValue(p))}</td>
       <td class="rp-td-actions"><div class="rp-row-actions">
         <button class="rp-icon-btn" onclick="openPromoModal('${p.id}')" title="Ubah">${icon("pencil",15)}</button>
@@ -4131,7 +4179,7 @@ function renderPromoSection(){
     <div class="rp-ruled-head">Promo &amp; diskon per cabang</div>
     <p class="rp-sub" style="margin-top:-6px;margin-bottom:12px;">Daftar promo di sini muncul sebagai pilihan dropdown saat kasir menutup transaksi, sesuai cabang unitnya.</p>
     <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openPromoModal('')">${icon("plus",14)} Tambah promo</button></div>
-    ${!promos.length ? emptyState("Belum ada promo/diskon. Tanpa promo, kasir tetap bisa mengisi diskon manual saat menutup transaksi.") : `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Nama promo</th><th>Cabang</th><th>Nilai</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+    ${!promos.length ? emptyState("Belum ada promo/diskon. Tanpa promo, kasir tetap bisa mengisi diskon manual saat menutup transaksi.") : `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Nama promo</th><th>Cabang</th><th>Nilai</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${paginationHtml('units-promos', promosPg.page, promosPg.totalPages, promosPg.totalItems)}`}
   `;
 }
 function openPromoModal(id){
@@ -4195,9 +4243,16 @@ function renderRiwayat() {
   const visibleTx = getVisibleTransactions();
   const total = visibleTx.reduce((a,t)=>a+t.amount,0);
   const totalDiscount = visibleTx.reduce((a,t)=>a+(t.discount||0),0);
-  const rows = visibleTx.map((t, i) => `
-    <tr data-name="${esc((t.unitName+" "+t.customerName).toLowerCase())}">
-      <td class="rp-mono rp-td-no">${i+1}</td>
+  // Pencarian sekarang menyaring dulu datanya (bukan cuma sembunyikan baris
+  // lewat CSS) supaya hasil pencarian tetap benar walau tabelnya dipotong
+  // per 10 baris — kalau tidak, orang yang dicari bisa saja "ketutup" di
+  // halaman lain dan kelihatan seperti tidak ketemu.
+  const searchQ = (window._riwayatSearch || "").trim().toLowerCase();
+  const filteredTx = searchQ ? visibleTx.filter(t => (t.unitName+" "+t.customerName).toLowerCase().includes(searchQ)) : visibleTx;
+  const riwayatPg = paginateRows('riwayat', filteredTx);
+  const rows = riwayatPg.pageRows.map((t, i) => `
+    <tr>
+      <td class="rp-mono rp-td-no">${riwayatPg.startIdx+i+1}</td>
       <td>${fmtDateID(t.end)} <span class="rp-dim">${fmtTimeID(t.end)}</span></td>
       <td>${esc(t.branchName || getBranchName(t.branchId))}</td>
       <td>${esc(t.unitName)}</td>
@@ -4214,14 +4269,27 @@ function renderRiwayat() {
         title: "Riwayat Sewa",
         subtitle: `${visibleTx.length} transaksi · total ${rupiah(total)}${totalDiscount ? ` · total diskon ${rupiah(totalDiscount)}` : ""}`,
         subtitleId: "riwayat-count",
-        tools: `<div class="rp-search">${icon("search",14)}<input id="riwayat-search" placeholder="Cari unit / nama…" /></div>
+        tools: `<div class="rp-search">${icon("search",14)}<input id="riwayat-search" placeholder="Cari unit / nama…" value="${esc(window._riwayatSearch||"")}" oninput="setRiwayatSearch(this.value)" /></div>
           <button class="rp-btn rp-btn-ghost" onclick="exportRiwayatCSV()" ${!state.transactions.length?"disabled":""}>${icon("download",14)} Ekspor Excel</button>`
       })}
       <div class="rp-table-wrap"><table class="rp-table" id="riwayat-table">
         <thead><tr><th class="rp-th-no">No</th><th>Tanggal</th><th>Cabang</th><th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Diskon</th><th>Total</th><th>Bayar</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="9">${emptyState("Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="9">${emptyState(searchQ ? "Tidak ada transaksi yang cocok dengan pencarian." : "Belum ada transaksi tercatat.")}</td></tr>`}</tbody>
       </table></div>
+      ${paginationHtml('riwayat', riwayatPg.page, riwayatPg.totalPages, riwayatPg.totalItems)}
     </div>`;
+}
+// Dipanggil tiap kali kasir/admin ngetik di kotak pencarian Riwayat. State
+// query-nya disimpan di window supaya bertahan lewat re-render, lalu fokus
+// & posisi kursor input dikembalikan manual sesudahnya (karena renderAll()
+// mengganti ulang seluruh DOM, termasuk input ini).
+function setRiwayatSearch(value) {
+  window._riwayatSearch = value;
+  if (!window._tablePages) window._tablePages = {};
+  window._tablePages['riwayat'] = 1;
+  renderAll();
+  const el = document.getElementById('riwayat-search');
+  if (el) { el.focus(); const len = el.value.length; try { el.setSelectionRange(len, len); } catch(e) {} }
 }
 function exportRiwayatCSV() {
   downloadXLSX("riwayat-sewa.xlsx", state.transactions.map(t => ({
@@ -4234,9 +4302,12 @@ function exportRiwayatCSV() {
 
 /* --------------------- Member --------------------- */
 function renderMember() {
-  const rows = state.members.map((m, i) => `
-    <tr data-name="${esc(m.name.toLowerCase())}">
-      <td class="rp-mono rp-td-no">${i+1}</td>
+  const searchQ = (window._memberSearch || "").trim().toLowerCase();
+  const filteredMembers = searchQ ? state.members.filter(m => m.name.toLowerCase().includes(searchQ)) : state.members;
+  const memberPg = paginateRows('member', filteredMembers);
+  const rows = memberPg.pageRows.map((m, i) => `
+    <tr>
+      <td class="rp-mono rp-td-no">${memberPg.startIdx+i+1}</td>
       <td>${esc(m.name)}</td>
       <td class="rp-mono">${esc(m.phone||"-")}</td>
       <td class="rp-mono">${m.visits||0}</td>
@@ -4256,12 +4327,21 @@ function renderMember() {
         subtitle: "Simpan data pelanggan tetap untuk memantau kunjungan &amp; total belanja.",
         tools: `<button class="rp-btn rp-btn-start" onclick="openMemberModal('')">${icon("plus",14)} Tambah pelanggan</button>`
       })}
-      <div class="rp-search rp-search-wide">${icon("search",14)}<input id="member-search" placeholder="Cari nama pelanggan…" /></div>
+      <div class="rp-search rp-search-wide">${icon("search",14)}<input id="member-search" placeholder="Cari nama pelanggan…" value="${esc(window._memberSearch||"")}" oninput="setMemberSearch(this.value)" /></div>
       <div class="rp-table-wrap"><table class="rp-table" id="member-table">
         <thead><tr><th class="rp-th-no">No</th><th>Nama</th><th>No. HP</th><th>Kunjungan</th><th>Total belanja</th><th>Sejak</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7">${emptyState("Belum ada pelanggan tercatat.")}</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="7">${emptyState(searchQ ? "Tidak ada pelanggan yang cocok dengan pencarian." : "Belum ada pelanggan tercatat.")}</td></tr>`}</tbody>
       </table></div>
+      ${paginationHtml('member', memberPg.page, memberPg.totalPages, memberPg.totalItems)}
     </div>`;
+}
+function setMemberSearch(value) {
+  window._memberSearch = value;
+  if (!window._tablePages) window._tablePages = {};
+  window._tablePages['member'] = 1;
+  renderAll();
+  const el = document.getElementById('member-search');
+  if (el) { el.focus(); const len = el.value.length; try { el.setSelectionRange(len, len); } catch(e) {} }
 }
 // Chat "relationship selling" ke pelanggan tetap — sapaan hangat + ajakan
 // balik main, biar hubungan sama pelanggan tetap kejaga di luar transaksi.
@@ -4276,9 +4356,11 @@ function chatMemberWhatsApp(memberId) {
 
 /* --------------------- Stok & Servis --------------------- */
 function renderStok() {
-  const rows = state.inventory.filter(i => !i.unitId || getVisibleUnits().some(u=>u.id===i.unitId)).map((i, idx) => `
+  const items = state.inventory.filter(i => !i.unitId || getVisibleUnits().some(u=>u.id===i.unitId));
+  const stokPg = paginateRows('stok', items);
+  const rows = stokPg.pageRows.map((i, idx) => `
     <tr>
-      <td class="rp-mono rp-td-no">${idx+1}</td>
+      <td class="rp-mono rp-td-no">${stokPg.startIdx+idx+1}</td>
       <td>${i.photoUrl ? `<img src="${esc(i.photoUrl)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;display:block;" />` : `<div style="width:36px;height:36px;border-radius:6px;background:var(--rp-input-bg);border:1px dashed var(--rp-border-strong);"></div>`}</td>
       <td>${esc(i.name)}</td>
       <td>${esc(i.category)}</td>
@@ -4302,6 +4384,7 @@ function renderStok() {
         <thead><tr><th class="rp-th-no">No</th><th>Foto</th><th>Item</th><th>Kategori</th><th>Unit terkait</th><th>Kondisi</th><th>Cek terakhir</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="8">${emptyState("Belum ada item dicatat.")}</td></tr>`}</tbody>
       </table></div>
+      ${paginationHtml('stok', stokPg.page, stokPg.totalPages, stokPg.totalItems)}
     </div>`;
 }
 
@@ -4309,6 +4392,7 @@ function renderStok() {
 
 function setLaporanMonth(value) {
   window._laporanMonth = value;
+  resetLaporanTablePages();
   renderAll();
 }
 
@@ -4324,6 +4408,7 @@ function getLaporanBranchId() {
 }
 function setLaporanBranch(value) {
   window._laporanBranchId = value;
+  resetLaporanTablePages();
   renderAll();
 }
 function laporanBranchOptionsHtml() {
@@ -4388,11 +4473,13 @@ function getSelectedLaporanRange() {
 
 function openLabaRugiProtected() {
   window._laporanProtectedOpen = true;
+  resetLaporanTablePages();
   renderAll();
 }
 
 function closeLabaRugiProtected() {
   window._laporanProtectedOpen = false;
+  resetLaporanTablePages();
   renderAll();
 }
 
@@ -4705,6 +4792,55 @@ function buildLabaRugiInsights(ctx) {
   return { insights, recs };
 }
 
+/* --------------------- Pagination tabel (generik, dipakai di Laporan & Laba-Rugi) ---------------------
+   Prinsip: state halaman disimpan di window._tablePages[tableId] (global,
+   nge-persist selama tab dibuka), dipotong (clamp) otomatis kalau jumlah
+   data berubah (misal ganti bulan/cabang) sehingga tidak pernah nyasar ke
+   halaman kosong. Klik prev/next/pilih halaman cukup update state lalu
+   renderAll() ulang — sama seperti pola render lain di app ini. */
+const RP_TABLE_PAGE_SIZE = 10;
+function paginateRows(tableId, rows, pageSize = RP_TABLE_PAGE_SIZE) {
+  if (!window._tablePages) window._tablePages = {};
+  const totalItems = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  let page = window._tablePages[tableId] || 1;
+  if (page > totalPages) page = totalPages;
+  if (page < 1) page = 1;
+  window._tablePages[tableId] = page;
+  const startIdx = (page - 1) * pageSize;
+  const pageRows = rows.slice(startIdx, startIdx + pageSize);
+  return { pageRows, page, totalPages, totalItems, startIdx };
+}
+function setTablePage(tableId, page) {
+  if (!window._tablePages) window._tablePages = {};
+  window._tablePages[tableId] = page;
+  // Tabel yang ada di dalam modal (mis. Antrian, Rincian dashboard) butuh
+  // cara refresh yang beda: #modal-root itu elemen terpisah dari #root,
+  // jadi renderAll() saja tidak akan meng-update isinya. Kalau modal lagi
+  // terbuka dan sempat "mendaftarkan diri" lewat window._modalReopen,
+  // panggil itu supaya modal-nya di-render ulang dengan halaman baru —
+  // kalau tidak, baru fallback ke renderAll() biasa (tabel di halaman utama).
+  if (typeof window._modalReopen === "function") window._modalReopen();
+  else renderAll();
+}
+// Dipanggil tiap kali filter (bulan/cabang/tampilan) di Laporan & Laba-Rugi
+// berubah, supaya semua tabel balik ke halaman 1 (bukan nyangkut di halaman
+// terakhir dari data sebelumnya).
+function resetLaporanTablePages() { window._tablePages = {}; }
+function paginationHtml(tableId, page, totalPages, totalItems) {
+  if (totalPages <= 1) return '';
+  const pageOptions = Array.from({ length: totalPages }, (_, i) =>
+    `<option value="${i+1}"${i+1===page?' selected':''}>Halaman ${i+1}</option>`).join('');
+  return `<div class="rp-pagination">
+    <span class="rp-pagination-info">Halaman <strong>${page}</strong> dari <strong>${totalPages}</strong> · ${totalItems} baris</span>
+    <div class="rp-pagination-controls">
+      <button type="button" class="rp-pagination-btn" ${page<=1?'disabled':''} onclick="setTablePage('${tableId}', ${page-1})">← Sebelumnya</button>
+      <select class="rp-pagination-select" onchange="setTablePage('${tableId}', Number(this.value))">${pageOptions}</select>
+      <button type="button" class="rp-pagination-btn" ${page>=totalPages?'disabled':''} onclick="setTablePage('${tableId}', ${page+1})">Berikutnya →</button>
+    </div>
+  </div>`;
+}
+
 function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   const bid = branchId || getLaporanBranchId();
   const showBranchCol = bid === "ALL";
@@ -4721,6 +4857,8 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   const sortedRevenueTx = periodTx.slice().sort((a,b)=>toJakarta(b.end).getTime()-toJakarta(a.end).getTime());
   const revenueColCount = showBranchCol ? 8 : 7;
   const expenseColCount = showBranchCol ? 7 : 6;
+  const revenuePg = paginateRows('labarugi-revenue', sortedRevenueTx);
+  const expensePg = paginateRows('labarugi-expense', periodExpenses);
 
   // ---- Data untuk chart investor-grade ----
   const trendData = buildLabaRugiDailyTrend(start, periodTx, periodExpenses);
@@ -4780,13 +4918,15 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   ${renderInsightSection(lrInsights, lrRecs)}
   <div class="rp-ruled-head">Detail pendapatan</div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
-  <tbody>${sortedRevenueTx.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
+  <tbody>${revenuePg.pageRows.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${revenuePg.startIdx+i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
+  ${paginationHtml('labarugi-revenue', revenuePg.page, revenuePg.totalPages, revenuePg.totalItems)}
   <div class="rp-ruled-head">Pengeluaran</div>
   <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openExpenseModal('')">${icon("plus",14)} Catat pengeluaran</button></div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th></th></tr></thead>
-  <tbody>${periodExpenses.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-td-actions"><div class="rp-row-actions">
+  <tbody>${expensePg.pageRows.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${expensePg.startIdx+i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-td-actions"><div class="rp-row-actions">
     <button class="rp-icon-btn" onclick="openExpenseModal('${e.id}')" title="Ubah">${icon("pencil",15)}</button>
-    <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>`;
+    <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>
+  ${paginationHtml('labarugi-expense', expensePg.page, expensePg.totalPages, expensePg.totalItems)}`;
 }
 
 function renderLaporan() {
@@ -4888,6 +5028,10 @@ function renderLaporan() {
   window._laporanExportPeriod = selected.value;
   window._laporanExportLabel = selected.label;
 
+  const byUnitPg = paginateRows('laporan-unit', byUnit);
+  const byPaymentPg = paginateRows('laporan-payment', byPayment);
+  const byPromoPg = paginateRows('laporan-promo', byPromo);
+
   const { insights: laporanInsights, recs: laporanRecs } = buildLaporanInsights({
     totalRevenue, totalTx, avgPerTx, byUnit, byPayment,
     totalDiscount, discountPct, nonPromoTx, subtotalDiffPct,
@@ -4935,15 +5079,17 @@ function renderLaporan() {
       ${byUnit.length===0 ? emptyState('Belum ada data pendapatan pada bulan terpilih.') : `
         <div class="rp-table-wrap"><table class="rp-table">
           <thead><tr><th class="rp-th-no">No</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Jumlah sewa</th><th>Total durasi</th><th>Total pendapatan</th><th>Rata-rata/sewa</th></tr></thead>
-          <tbody>${byUnit.map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:''}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
-        </table></div>`}
+          <tbody>${byUnitPg.pageRows.map(([,d], i) => `<tr><td class="rp-mono rp-td-no">${byUnitPg.startIdx+i+1}</td>${showBranchCol?`<td>${esc(d.branchName)}</td>`:''}<td>${esc(d.unitName)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${(d.minutes/60).toFixed(1)} jam</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
+        </table></div>
+        ${paginationHtml('laporan-unit', byUnitPg.page, byUnitPg.totalPages, byUnitPg.totalItems)}`}
 
       <div class="rp-ruled-head">Metode pembayaran</div>
       ${byPayment.length===0 ? emptyState('Belum ada data pembayaran pada bulan terpilih.') : `
         <div class="rp-table-wrap"><table class="rp-table">
           <thead><tr><th class="rp-th-no">No</th><th>Metode</th><th>Jumlah transaksi</th><th>Total nominal</th></tr></thead>
-          <tbody>${byPayment.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${rupiah(d.total)}</td></tr>`).join('')}</tbody>
-        </table></div>`}
+          <tbody>${byPaymentPg.pageRows.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${byPaymentPg.startIdx+i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}</td><td class="rp-mono">${rupiah(d.total)}</td></tr>`).join('')}</tbody>
+        </table></div>
+        ${paginationHtml('laporan-payment', byPaymentPg.page, byPaymentPg.totalPages, byPaymentPg.totalItems)}`}
 
       <div class="rp-ruled-head">Efektivitas promo/diskon <span class="rp-dim" style="text-transform:none;letter-spacing:normal;">— seberapa sering & seberapa besar diskon dikasih ke pelanggan</span></div>
       ${totalDiscount === 0 ? emptyState('Belum ada diskon/promo dipakai pada bulan terpilih.') : `
@@ -4957,8 +5103,9 @@ function renderLaporan() {
         <div class="rp-ruled-head" style="margin-top:22px;">Rincian per promo</div>
         <div class="rp-table-wrap"><table class="rp-table">
           <thead><tr><th class="rp-th-no">No</th><th>Nama promo</th><th>Dipakai</th><th>Total diskon</th><th>Rata-rata diskon</th></tr></thead>
-          <tbody>${byPromo.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}x</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
+          <tbody>${byPromoPg.pageRows.map(([name,d], i) => `<tr><td class="rp-mono rp-td-no">${byPromoPg.startIdx+i+1}</td><td>${esc(name)}</td><td class="rp-mono">${d.count}x</td><td class="rp-mono">${rupiah(d.total)}</td><td class="rp-mono">${rupiah(d.total/d.count)}</td></tr>`).join('')}</tbody>
         </table></div>
+        ${paginationHtml('laporan-promo', byPromoPg.page, byPromoPg.totalPages, byPromoPg.totalItems)}
 
         <div class="rp-ruled-head" style="margin-top:22px;">Perbandingan nilai transaksi <span class="rp-dim" style="text-transform:none;letter-spacing:normal;">— pakai promo vs tidak, sebelum dipotong diskon</span></div>
         <div class="rp-stat-row">
@@ -5642,26 +5789,12 @@ function svgBranchProfitBarChart(branchData) {
 /* --------------------- Shared bits --------------------- */
 function emptyState(text) { return `<div class="rp-empty">${icon("info",15)} ${esc(text)}</div>`; }
 
-function wireTabExtras() {
-  const riwayatSearch = document.getElementById("riwayat-search");
-  if (riwayatSearch) {
-    riwayatSearch.addEventListener("input", (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll("#riwayat-table tbody tr[data-name]").forEach(tr => {
-        tr.style.display = tr.dataset.name.includes(q) ? "" : "none";
-      });
-    });
-  }
-  const memberSearch = document.getElementById("member-search");
-  if (memberSearch) {
-    memberSearch.addEventListener("input", (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll("#member-table tbody tr[data-name]").forEach(tr => {
-        tr.style.display = tr.dataset.name.includes(q) ? "" : "none";
-      });
-    });
-  }
-}
+// Pencarian Riwayat & Member sekarang ditangani lewat setRiwayatSearch()/
+// setMemberSearch() (server-side filter + render ulang, lihat komentar di
+// renderRiwayat/renderMember) supaya tetap akurat walau tabelnya dipaging
+// per 10 baris. Fungsi ini disisakan kosong (dipanggil dari renderAll())
+// buat jaga-jaga kalau nanti ada extras lain yang perlu di-"wire" manual.
+function wireTabExtras() {}
 
 /* =========================================================
    Init
