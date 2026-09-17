@@ -187,6 +187,14 @@
   /* Main */
   .rp-main { flex: 1; overflow-y: auto; padding: 28px 32px; min-width: 0; height: 100vh; }
   .rp-page { max-width: 940px; }
+  /* Nyala sesaat pas landing abis scroll ke section/baris tertentu (lihat
+     window._pendingScrollTo di renderAll) — biar user langsung ngeh mana
+     yang dimaksud, bukan cuma posisi scroll yang diam-diam berubah. */
+  .rp-just-focused { animation: rp-focus-flash 1.6s ease-out; }
+  @keyframes rp-focus-flash {
+    0% { box-shadow: 0 0 0 3px var(--rp-chip-bg); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
   .rp-page-head { margin-bottom: 20px; }
   .rp-page-head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   .rp-page-head h1 { font-family: var(--rp-serif); font-weight: 600; font-size: 23px; margin: 0 0 4px; letter-spacing: -0.01em; }
@@ -2215,7 +2223,10 @@ function startRental(unitId, customerName, memberId, note, plannedMinutes) {
   // Selalu arahkan ke Dashboard begitu sewa dimulai — ini "rumah"-nya unit
   // yang lagi jalan (timer, tombol Selesai & Bayar, dll), baik dipicu dari
   // menu akses cepat (rel kiri/fan avatar) maupun langsung dari kartu unit.
+  // Bukan cuma pindah tab doang — langsung scroll ke kartu unit yang baru
+  // disewa itu juga, biar nggak perlu nyari-nyari lagi di antara kartu lain.
   currentTab = "dashboard";
+  window._pendingScrollTo = "unit-card-" + unitId;
   renderAll();
   persistActive(); persistUnits();
   flash(`${unit ? unit.name : "Unit"} mulai disewa${endTime ? ` — durasi ${plannedMinutes} menit` : ""}`);
@@ -2632,7 +2643,25 @@ function upsertMember(m) {
   // Arahkan ke halaman Pelanggan — baik ini ditambahkan lewat menu akses
   // cepat dari tab manapun, atau diubah langsung dari tabel di halaman ini.
   currentTab = "member";
+  focusMemberRow(m.id);
   renderAll(); persistMembers();
+}
+// Loncat ke halaman pagination yang tepat lalu scroll ke baris pelanggan
+// yang barusan ditambah/diubah, biar hasilnya langsung kelihatan — bukan
+// cuma balik ke atas halaman Pelanggan doang. Kalau baris itu ternyata
+// nggak lolos filter pencarian yang lagi aktif, minimal arahkan ke area
+// tabelnya aja.
+function focusMemberRow(memberId) {
+  const searchQ = (window._memberSearch || "").trim().toLowerCase();
+  const filtered = searchQ ? state.members.filter(m => m.name.toLowerCase().includes(searchQ)) : state.members;
+  const idx = filtered.findIndex(m => m.id === memberId);
+  if (idx >= 0) {
+    if (!window._tablePages) window._tablePages = {};
+    window._tablePages['member'] = Math.floor(idx / RP_TABLE_PAGE_SIZE) + 1;
+    window._pendingScrollTo = 'member-row-' + memberId;
+  } else {
+    window._pendingScrollTo = 'member-table-section';
+  }
 }
 function removeMember(id) {
   const m = state.members.find(x => x.id === id);
@@ -2672,8 +2701,36 @@ function upsertExpense(exp) {
   // hasil inputnya kelihatan, baik dipicu dari menu akses cepat maupun dari
   // tombol "Catat pengeluaran" di halaman Laba-Rugi itu sendiri. Dijaga
   // isAdmin() karena tab Laporan memang khusus admin.
-  if (isAdmin()) { currentTab = "laporan"; window._laporanProtectedOpen = true; }
+  if (isAdmin()) {
+    currentTab = "laporan";
+    window._laporanProtectedOpen = true;
+    focusExpenseRow(exp.id);
+  }
   renderAll(); persistExpenses();
+}
+// Sama kayak focusMemberRow: loncat ke halaman pagination yang tepat di
+// tabel Pengeluaran (Laba-Rugi) lalu scroll ke baris yang barusan
+// disimpan. Kalau pengeluaran itu di luar filter bulan/cabang yang lagi
+// aktif di Laporan (mis. tanggalnya beda bulan), minimal arahkan ke
+// section "Pengeluaran"-nya aja biar konteksnya tetap kelihatan.
+function focusExpenseRow(expenseId) {
+  try {
+    const range = getSelectedLaporanRange();
+    const bid = getLaporanBranchId();
+    const periodExpenses = state.expenses.filter(e => {
+      const d = toJakarta(e.date).getTime();
+      const eb = e.branchId || getBranches()[0].id;
+      return d >= range.start.getTime() && d <= range.end.getTime() && (bid === "ALL" || eb === bid);
+    });
+    const idx = periodExpenses.findIndex(e => e.id === expenseId);
+    if (idx >= 0) {
+      if (!window._tablePages) window._tablePages = {};
+      window._tablePages['labarugi-expense'] = Math.floor(idx / RP_TABLE_PAGE_SIZE) + 1;
+      window._pendingScrollTo = 'expense-row-' + expenseId;
+      return;
+    }
+  } catch (e) {}
+  window._pendingScrollTo = 'labarugi-expense-section';
 }
 function removeExpense(id) {
   const e = state.expenses.find(x => x.id === id);
@@ -2731,8 +2788,11 @@ function addToQueue(customerName, phone, unitId, note) {
   persistQueue();
   // Antrian nggak punya halaman sendiri — "rumah"-nya ada di Dashboard
   // (kartu statistik "Antrian menunggu" & tombol antrian per unit), jadi
-  // arahkan ke situ di belakang modal antrian yang kebuka.
+  // arahkan ke situ di belakang modal antrian yang kebuka. Kalau antriannya
+  // buat unit tertentu (bukan "unit apapun"), sekalian scroll dashboard-nya
+  // ke kartu unit itu — jadi begitu modal ditutup, langsung kelihatan.
   currentTab = "dashboard";
+  if (unitId) window._pendingScrollTo = "unit-card-" + unitId;
   renderAll();
   openQueueModal();
   flash(`${customerName || "Tamu"} ditambahkan ke antrian.`);
@@ -2995,9 +3055,23 @@ function closeModal() {
   clearInterval(window._expiredBlockTick);
 }
 function openModal(html) {
+  // Sama kayak .rp-main di renderAll(): .rp-modal itu kontainer scroll-nya
+  // sendiri (overflow-y:auto), dan tiap kali modal di-render ulang (mis.
+  // pagination di dalam modal Antrian/Rincian lewat _modalReopen), elemen
+  // .rp-modal lama dibuang & diganti yang baru — jadi scroll-nya kebawa
+  // balik ke atas. Simpen dulu posisi scroll modal yang lagi kebuka (kalau
+  // ada), lalu pasang lagi setelah modal baru dipasang.
+  const prevModal = document.querySelector("#modal-root .rp-modal");
+  const prevScrollTop = prevModal ? prevModal.scrollTop : 0;
+
   document.getElementById("modal-root").innerHTML = html;
   window._expiredModalShownFor = null;
   clearInterval(window._expiredBlockTick);
+
+  if (prevScrollTop) {
+    const newModal = document.querySelector("#modal-root .rp-modal");
+    if (newModal) newModal.scrollTop = prevScrollTop;
+  }
 }
 
 function modalShell(title, bodyHtml) {
@@ -3789,11 +3863,34 @@ function removeQrisImage() {
   flash("QRIS dihapus.");
 }
 
+let _lastScrolledTab = null;
 function renderAll() {
   if (!ready) return;
   if (typeof hideTrendHover === "function") hideTrendHover();
   const enter = firstRenderDone ? "" : " rp-fade-in";
   firstRenderDone = true;
+
+  // renderAll() selalu bikin ulang #root dari nol (innerHTML =), termasuk
+  // .rp-main yang jadi kontainer scroll section aktif. Karena itu elemen
+  // .rp-main yang lama "dibuang" tiap renderAll() dipanggil, elemen barunya
+  // otomatis scrollTop=0 — makanya klik next/prev pagination, ganti filter,
+  // edit/hapus baris, dsb kelihatan kayak "mental" balik ke atas section.
+  // Supaya nggak gitu, kita simpen dulu posisi scroll-nya sebelum di-render
+  // ulang, lalu kita pasang lagi ke elemen .rp-main yang baru — TAPI cuma
+  // kalau tab-nya emang nggak ganti. Kalau tab beneran ganti (termasuk pas
+  // submit dari tombol Aksi cepat yang sengaja arahin ke halaman lain),
+  // biarkan mulai dari atas kayak biasa karena itu section yang berbeda.
+  const prevMain = document.querySelector(".rp-main");
+  const prevScrollTop = prevMain ? prevMain.scrollTop : 0;
+  const sameTab = currentTab === _lastScrolledTab;
+  _lastScrolledTab = currentTab;
+
+  // Kalau ada permintaan scroll eksplisit ke elemen tertentu — dipasang oleh
+  // startRental/addToQueue/focusMemberRow/focusExpenseRow sesaat sebelum
+  // renderAll() ini dipanggil (termasuk sudah nentuin halaman pagination
+  // yang tepat kalau baris targetnya ada di tabel) — itu menang dibanding
+  // logic "pertahanin scroll lama" di atas.
+  const scrollTargetId = window._pendingScrollTo || null;
 
   document.getElementById("root").innerHTML = `
     <aside class="rp-quickrail${enter}">
@@ -3820,6 +3917,19 @@ function renderAll() {
   renderSyncDot();
   renderUserMenu();
   wireTabExtras();
+
+  window._pendingScrollTo = null;
+  if (scrollTargetId) {
+    const target = document.getElementById(scrollTargetId);
+    if (target) {
+      target.scrollIntoView({ block: "center" });
+      target.classList.add("rp-just-focused");
+      setTimeout(() => target.classList && target.classList.remove("rp-just-focused"), 1600);
+    }
+  } else if (sameTab && prevScrollTop) {
+    const newMain = document.querySelector(".rp-main");
+    if (newMain) newMain.scrollTop = prevScrollTop;
+  }
 }
 
 function renderTab() {
@@ -3859,7 +3969,7 @@ function renderDashboard() {
     const queuedForUnit = state.queue.filter(q => q.unitId === unit.id).length;
     const cardClick = isActive ? `openUnitDetailModal('${unit.id}')` : isMaint ? `openMaintModal('${unit.id}')` : `openStartModal('${unit.id}')`;
     return `
-      <div class="rp-card rp-unit-card rp-clickable${isActive?" is-active":""}${isMaint?" is-maint":""}" onclick="${cardClick}">
+      <div id="unit-card-${unit.id}" class="rp-card rp-unit-card rp-clickable${isActive?" is-active":""}${isMaint?" is-maint":""}" onclick="${cardClick}">
         <div class="rp-stamp rp-stamp-${unit.status}">${unit.status==="available"?"Kosong":unit.status==="active"?"Disewa":"Servis"}</div>
         <div class="rp-unit-name">${esc(unit.name)}</div>
         <div class="rp-unit-rate rp-mono">${rupiah(unit.rate)}/jam</div>
@@ -4306,7 +4416,7 @@ function renderMember() {
   const filteredMembers = searchQ ? state.members.filter(m => m.name.toLowerCase().includes(searchQ)) : state.members;
   const memberPg = paginateRows('member', filteredMembers);
   const rows = memberPg.pageRows.map((m, i) => `
-    <tr>
+    <tr id="member-row-${m.id}">
       <td class="rp-mono rp-td-no">${memberPg.startIdx+i+1}</td>
       <td>${esc(m.name)}</td>
       <td class="rp-mono">${esc(m.phone||"-")}</td>
@@ -4328,7 +4438,7 @@ function renderMember() {
         tools: `<button class="rp-btn rp-btn-start" onclick="openMemberModal('')">${icon("plus",14)} Tambah pelanggan</button>`
       })}
       <div class="rp-search rp-search-wide">${icon("search",14)}<input id="member-search" placeholder="Cari nama pelanggan…" value="${esc(window._memberSearch||"")}" oninput="setMemberSearch(this.value)" /></div>
-      <div class="rp-table-wrap"><table class="rp-table" id="member-table">
+      <div id="member-table-section" class="rp-table-wrap"><table class="rp-table" id="member-table">
         <thead><tr><th class="rp-th-no">No</th><th>Nama</th><th>No. HP</th><th>Kunjungan</th><th>Total belanja</th><th>Sejak</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7">${emptyState(searchQ ? "Tidak ada pelanggan yang cocok dengan pencarian." : "Belum ada pelanggan tercatat.")}</td></tr>`}</tbody>
       </table></div>
@@ -4920,10 +5030,10 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
   <tbody>${revenuePg.pageRows.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${revenuePg.startIdx+i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
   ${paginationHtml('labarugi-revenue', revenuePg.page, revenuePg.totalPages, revenuePg.totalItems)}
-  <div class="rp-ruled-head">Pengeluaran</div>
+  <div id="labarugi-expense-section" class="rp-ruled-head">Pengeluaran</div>
   <div class="rp-head-tools" style="margin-bottom:12px"><button class="rp-btn rp-btn-start" onclick="openExpenseModal('')">${icon("plus",14)} Catat pengeluaran</button></div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th></th></tr></thead>
-  <tbody>${expensePg.pageRows.map((e,i)=>`<tr><td class="rp-mono rp-td-no">${expensePg.startIdx+i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-td-actions"><div class="rp-row-actions">
+  <tbody>${expensePg.pageRows.map((e,i)=>`<tr id="expense-row-${e.id}"><td class="rp-mono rp-td-no">${expensePg.startIdx+i+1}</td><td>${fmtDateID(e.date)}</td>${showBranchCol?`<td>${esc(e.branchName||getBranchName(e.branchId))}</td>`:''}<td>${esc(e.category)}</td><td>${esc(e.description||"-")}</td><td class="rp-mono">${rupiah(e.amount)}</td><td class="rp-td-actions"><div class="rp-row-actions">
     <button class="rp-icon-btn" onclick="openExpenseModal('${e.id}')" title="Ubah">${icon("pencil",15)}</button>
     <button class="rp-icon-btn rp-icon-danger" onclick="removeExpense('${e.id}')" title="Hapus">${icon("trash",15)}</button></div></td></tr>`).join("")||`<tr><td colspan="${expenseColCount}">${emptyState("Belum ada pengeluaran pada periode ini.")}</td></tr>`}</tbody></table></div>
   ${paginationHtml('labarugi-expense', expensePg.page, expensePg.totalPages, expensePg.totalItems)}`;
