@@ -326,6 +326,47 @@
   .rp-kembalian-box.is-short .rp-kembalian-value { color: var(--rp-red); font-size: 26px; }
 
   .rp-chart-box { border: 1px solid var(--rp-border); border-radius: 10px; padding: 14px; background: var(--rp-surface); box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight); }
+
+  /* Insight & Rekomendasi — dipakai di halaman Laporan & Laba-Rugi.
+     Kartu bergaris aksen di kiri (warna beda tergantung sentimen), biar
+     bisa cepat dipindai tanpa baca semua teks: hijau = bagus, kuning =
+     perlu perhatian, merah = masalah/rugi, netral = info biasa. */
+  .rp-insight-grid { display: flex; flex-direction: column; gap: 10px; }
+  .rp-insight-card {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--rp-surface); border: 1px solid var(--rp-border);
+    border-left: 3px solid var(--rp-navy); border-radius: 10px; padding: 13px 15px;
+    box-shadow: var(--rp-panel-shadow), inset 0 1px 0 var(--rp-panel-highlight);
+  }
+  .rp-insight-card.is-good { border-left-color: var(--rp-teal); }
+  .rp-insight-card.is-warn { border-left-color: var(--rp-amber); }
+  .rp-insight-card.is-bad { border-left-color: var(--rp-red); }
+  .rp-insight-icon {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--rp-neutral-tint); color: var(--rp-navy);
+  }
+  .rp-insight-card.is-good .rp-insight-icon { background: var(--rp-teal-tint); color: var(--rp-teal); }
+  .rp-insight-card.is-warn .rp-insight-icon { background: var(--rp-amber-tint); color: var(--rp-amber); }
+  .rp-insight-card.is-bad .rp-insight-icon { background: var(--rp-red-tint); color: var(--rp-red); }
+  .rp-insight-body { flex: 1; min-width: 0; }
+  .rp-insight-title { font-family: var(--rp-serif); font-weight: 600; font-size: 13.5px; margin-bottom: 4px; color: var(--rp-ink); }
+  .rp-insight-text { font-size: 12.5px; color: var(--rp-ink-dim); line-height: 1.55; }
+  .rp-insight-text strong { color: var(--rp-ink); font-weight: 700; }
+  .rp-priority-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 20px; flex-shrink: 0; white-space: nowrap;
+  }
+  .rp-priority-badge.p-tinggi { background: var(--rp-red-tint); color: var(--rp-red); }
+  .rp-priority-badge.p-sedang { background: var(--rp-amber-tint); color: var(--rp-amber); }
+  .rp-priority-badge.p-rendah { background: var(--rp-teal-tint); color: var(--rp-teal); }
+  @media (max-width: 720px) {
+    .rp-insight-card { padding: 11px 12px; gap: 10px; }
+    .rp-insight-icon { width: 26px; height: 26px; }
+    .rp-insight-title { font-size: 12.5px; }
+    .rp-insight-text { font-size: 12px; }
+  }
+
   .rp-chart-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 12px; color: var(--rp-ink-dim); flex-wrap: wrap; }
   .rp-legend-item { display: flex; align-items: center; gap: 6px; }
   .rp-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
@@ -1477,6 +1518,11 @@ const ICONS = {
   wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/><path d="M18 13h.01"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  "trending-up": '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+  "trending-down": '<path d="M22 17 13.5 8.5 8.5 13.5 2 7"/><path d="M16 17h6v-6"/>',
+  "alert-triangle": '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1v.2h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/>',
 };
 // Logo WhatsApp asli pakai fill (bukan stroke) biar bentuknya kebaca —
 // makanya dirender lewat fungsi terpisah ini, bukan lewat icon() biasa
@@ -4416,6 +4462,249 @@ function buildLaporanTrend(period, currentStart, branchId) {
   return { labels, current, previous, prevYear, prevMonth };
 }
 
+/* --------------------- Insight & Rekomendasi (Laporan & Laba-Rugi) ---------------------
+   Kartu-kartu ini dibangun murni dari data yang sudah dihitung di
+   renderLaporan()/renderLabaRugiBody() (tidak query ulang ke state), jadi
+   selalu konsisten dengan angka yang tampil di atasnya. Ambang batas
+   (threshold) di bawah ini sengaja dibuat masuk akal untuk bisnis rental
+   skala kecil-menengah, boleh disesuaikan kalau perlu. */
+function insightCard(type, title, text) {
+  const cls = type === 'good' ? 'is-good' : type === 'warn' ? 'is-warn' : type === 'bad' ? 'is-bad' : '';
+  const ic = type === 'good' ? 'trending-up' : type === 'warn' ? 'alert-triangle' : type === 'bad' ? 'trending-down' : 'info';
+  return `<div class="rp-insight-card ${cls}">
+    <span class="rp-insight-icon">${icon(ic, 15)}</span>
+    <div class="rp-insight-body">
+      <div class="rp-insight-title">${esc(title)}</div>
+      <div class="rp-insight-text">${text}</div>
+    </div>
+  </div>`;
+}
+function rekomendasiCard(priority, title, text) {
+  const map = {
+    tinggi: ['is-bad', 'p-tinggi', 'Prioritas tinggi'],
+    sedang: ['is-warn', 'p-sedang', 'Prioritas sedang'],
+    rendah: ['is-good', 'p-rendah', 'Prioritas rendah'],
+  };
+  const [cls, badgeCls, badgeLabel] = map[priority] || map.sedang;
+  return `<div class="rp-insight-card ${cls}">
+    <span class="rp-insight-icon">${icon('target', 15)}</span>
+    <div class="rp-insight-body">
+      <div class="rp-insight-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span>${esc(title)}</span>
+        <span class="rp-priority-badge ${badgeCls}">${badgeLabel}</span>
+      </div>
+      <div class="rp-insight-text">${text}</div>
+    </div>
+  </div>`;
+}
+function renderInsightSection(insights, recs) {
+  return `
+  <div class="rp-ruled-head">${icon('bulb', 14)} Insight <span class="rp-dim" style="text-transform:none;letter-spacing:normal;">— pembacaan otomatis dari data periode ini</span></div>
+  <div class="rp-insight-grid">${insights.length ? insights.join('') : emptyState('Belum cukup data untuk insight pada periode ini.')}</div>
+  <div class="rp-ruled-head" style="margin-top:22px;">${icon('target', 14)} Rekomendasi</div>
+  <div class="rp-insight-grid">${recs.length ? recs.join('') : emptyState('Belum ada rekomendasi khusus untuk periode ini.')}</div>`;
+}
+
+// Insight & rekomendasi untuk halaman "Laporan" (fokus pendapatan/operasional).
+function buildLaporanInsights(ctx) {
+  const {
+    totalRevenue, totalTx, avgPerTx, byUnit, byPayment,
+    totalDiscount, discountPct, nonPromoTx, subtotalDiffPct,
+    revenueDiff, revenueDiffPct, prevMonthTotal, prevMonthLabel,
+  } = ctx;
+  const insights = [], recs = [];
+
+  // 1) Tren pendapatan vs bulan lalu
+  if (prevMonthTotal > 0 || totalRevenue > 0) {
+    if (revenueDiff > 0) {
+      insights.push(insightCard('good', 'Pendapatan tumbuh dibanding bulan lalu',
+        `Pendapatan naik <strong>${Math.abs(revenueDiffPct).toFixed(1)}%</strong> (${rupiah(revenueDiff)}) dibanding ${esc(prevMonthLabel)}.`));
+    } else if (revenueDiff < 0) {
+      insights.push(insightCard('bad', 'Pendapatan turun dibanding bulan lalu',
+        `Pendapatan turun <strong>${Math.abs(revenueDiffPct).toFixed(1)}%</strong> (${rupiah(Math.abs(revenueDiff))}) dibanding ${esc(prevMonthLabel)}.`));
+      recs.push(rekomendasiCard('tinggi', 'Cari tahu penyebab penurunan pendapatan',
+        `Bandingkan jumlah sewa &amp; jam sewa bulan ini dengan bulan lalu di rincian per unit — cek apakah ada unit yang sering kosong/rusak, jam ramai bergeser, atau ada pesaing baru. Pertimbangkan promo terbatas waktu untuk mendongkrak transaksi di sisa periode.`));
+    }
+  }
+
+  // 2) Konsentrasi & kesenjangan performa unit
+  if (byUnit.length) {
+    const top = byUnit[0][1];
+    const topShare = totalRevenue > 0 ? (top.total / totalRevenue * 100) : 0;
+    if (topShare >= 40) {
+      insights.push(insightCard('warn', 'Pendapatan bertumpu pada satu unit',
+        `Unit <strong>${esc(top.unitName)}</strong> menyumbang <strong>${topShare.toFixed(1)}%</strong> dari total pendapatan bulan ini — cukup berisiko kalau unit ini rusak atau harus di-maintenance mendadak.`));
+      recs.push(rekomendasiCard('sedang', `Kurangi ketergantungan pada ${esc(top.unitName)}`,
+        `Prioritaskan perawatan rutin unit ini supaya minim downtime, dan buat promo silang (bundling/diskon) ke unit lain agar beban pendapatan tidak menumpuk di satu unit saja.`));
+    }
+    if (byUnit.length >= 3) {
+      const bottom = byUnit[byUnit.length - 1][1];
+      const bottomShare = totalRevenue > 0 ? (bottom.total / totalRevenue * 100) : 0;
+      if (bottomShare > 0 && bottomShare < 5) {
+        insights.push(insightCard('info', 'Ada unit dengan kontribusi sangat kecil',
+          `Unit <strong>${esc(bottom.unitName)}</strong> hanya menyumbang <strong>${bottomShare.toFixed(1)}%</strong> dari total pendapatan (${bottom.count}x disewa) bulan ini.`));
+        recs.push(rekomendasiCard('rendah', `Evaluasi unit ${esc(bottom.unitName)}`,
+          `Cek kondisi fisik, harga sewa, dan posisi/penempatan unit ini. Kalau memang kurang diminati, coba promo khusus, reposisi tempat, atau jadikan unit cadangan untuk jam ramai.`));
+      }
+    }
+  }
+
+  // 3) Konsentrasi metode pembayaran (risiko rekonsiliasi kas)
+  if (byPayment.length) {
+    const [topName, topData] = byPayment[0];
+    const topPayShare = totalRevenue > 0 ? (topData.total / totalRevenue * 100) : 0;
+    if (/tunai|cash/i.test(topName) && topPayShare >= 70) {
+      insights.push(insightCard('warn', 'Transaksi masih didominasi tunai',
+        `<strong>${topPayShare.toFixed(1)}%</strong> pendapatan bulan ini dibayar via ${esc(topName)} — lebih rawan selisih kas dan lebih sulit ditelusuri dibanding pembayaran digital.`));
+      recs.push(rekomendasiCard('sedang', 'Dorong pembayaran non-tunai',
+        `Tawarkan QRIS/transfer sebagai opsi utama saat closing transaksi di kasir, dan lakukan rekap fisik kas lebih rutin (harian) untuk menekan risiko selisih.`));
+    }
+  }
+
+  // 4) Efektivitas promo/diskon
+  if (totalDiscount > 0) {
+    if (discountPct >= 15) {
+      insights.push(insightCard('warn', 'Diskon menggerus porsi cukup besar dari pendapatan kotor',
+        `Total diskon <strong>${rupiah(totalDiscount)}</strong> setara <strong>${discountPct.toFixed(1)}%</strong> dari pendapatan kotor bulan ini — cukup besar untuk skala bulanan.`));
+    }
+    if (nonPromoTx.length > 0) {
+      if (subtotalDiffPct >= 10) {
+        insights.push(insightCard('good', 'Promo terbukti mendorong nilai transaksi lebih besar',
+          `Transaksi yang pakai promo rata-rata <strong>${Math.abs(subtotalDiffPct).toFixed(1)}% lebih besar</strong> dibanding yang tidak pakai promo — indikasi promo efektif mendorong belanja pelanggan.`));
+        recs.push(rekomendasiCard('rendah', 'Lanjutkan & perluas promo yang berjalan',
+          `Promo saat ini terbukti mendorong nilai transaksi lebih besar. Pertimbangkan menaikkan anggaran promo atau memperluasnya ke unit/jam yang masih sepi.`));
+      } else if (subtotalDiffPct < 0) {
+        insights.push(insightCard('bad', 'Promo justru dipakai di transaksi bernilai kecil',
+          `Transaksi pakai promo rata-rata <strong>${Math.abs(subtotalDiffPct).toFixed(1)}% lebih kecil</strong> dibanding tanpa promo — diskon di bulan ini lebih ke arah memotong margin daripada mendorong belanja tambahan.`));
+        recs.push(rekomendasiCard('tinggi', 'Evaluasi ulang syarat & sasaran promo',
+          `Pertimbangkan menaikkan minimum transaksi untuk memakai promo, atau targetkan promo khusus ke jam/hari sepi saja supaya tidak memotong margin transaksi yang sebenarnya sudah ramai.`));
+      }
+    }
+  } else if (totalRevenue > 0) {
+    insights.push(insightCard('info', 'Belum ada promo dipakai bulan ini',
+      `Tidak ada transaksi dengan diskon pada periode ini, jadi efektivitas promo belum bisa diukur untuk bulan ini.`));
+  }
+
+  // 5) Ringkasan volume transaksi (info umum, selalu tampil kalau ada data)
+  if (totalTx > 0) {
+    insights.push(insightCard('info', 'Ringkasan volume transaksi',
+      `Tercatat <strong>${totalTx} transaksi</strong> sewa dengan rata-rata <strong>${rupiah(avgPerTx)}</strong> per transaksi pada periode ini.`));
+  }
+
+  if (!recs.length) {
+    recs.push(rekomendasiCard('rendah', 'Pertahankan performa saat ini',
+      `Tidak ada sinyal masalah signifikan dari data bulan ini. Fokus jaga kualitas layanan &amp; kondisi unit, serta pantau tren di bulan berikutnya.`));
+  }
+  return { insights, recs };
+}
+
+// Insight & rekomendasi untuk halaman "Laba-Rugi" (fokus kesehatan keuangan).
+function buildLabaRugiInsights(ctx) {
+  const {
+    totalRevenue, totalExpense, netProfit, profitMarginPct,
+    expenseCategories, prevTotals, prevRangeLabel, trendData, branchData,
+  } = ctx;
+  const insights = [], recs = [];
+
+  // 1) Kesehatan margin laba
+  if (totalRevenue > 0) {
+    if (netProfit < 0) {
+      insights.push(insightCard('bad', 'Bulan ini merugi',
+        `Pengeluaran (${rupiah(totalExpense)}) melebihi pendapatan (${rupiah(totalRevenue)}), sehingga rugi bersih <strong>${rupiah(Math.abs(netProfit))}</strong>.`));
+      recs.push(rekomendasiCard('tinggi', 'Lakukan pemangkasan biaya segera',
+        `Tinjau ulang komponen pengeluaran terbesar bulan ini (lihat "Komposisi pengeluaran per kategori" di atas) dan tunda biaya yang bisa ditunda. Cek juga apakah harga sewa saat ini masih sesuai dengan biaya operasional.`));
+    } else if (profitMarginPct < 10) {
+      insights.push(insightCard('warn', 'Margin laba masih tipis',
+        `Laba bersih hanya <strong>${profitMarginPct.toFixed(1)}%</strong> dari pendapatan (${rupiah(netProfit)}) — ruang aman terhadap kenaikan biaya mendadak masih kecil.`));
+      recs.push(rekomendasiCard('sedang', 'Perbesar margin sebelum ekspansi',
+        `Pertimbangkan efisiensi biaya operasional rutin atau penyesuaian harga sewa sebelum menambah unit/cabang baru, supaya buffer laba lebih aman.`));
+    } else if (profitMarginPct < 25) {
+      insights.push(insightCard('good', 'Margin laba sehat',
+        `Laba bersih <strong>${profitMarginPct.toFixed(1)}%</strong> dari pendapatan (${rupiah(netProfit)}) — berada di kisaran sehat untuk bisnis rental.`));
+    } else {
+      insights.push(insightCard('good', 'Margin laba sangat baik',
+        `Laba bersih mencapai <strong>${profitMarginPct.toFixed(1)}%</strong> dari pendapatan (${rupiah(netProfit)}) — kondisi keuangan bulan ini kuat.`));
+      recs.push(rekomendasiCard('rendah', 'Manfaatkan momentum untuk berkembang',
+        `Margin sedang tinggi — waktu yang baik untuk menyisihkan sebagian laba sebagai dana darurat/ekspansi, misalnya menambah unit baru atau membuka cabang.`));
+    }
+  } else {
+    insights.push(insightCard('info', 'Belum ada pendapatan pada periode ini',
+      `Data pendapatan masih kosong sehingga margin laba belum bisa dihitung untuk periode ini.`));
+  }
+
+  // 2) Perbandingan bulan-ke-bulan (MoM)
+  if (prevTotals && (prevTotals.totalRevenue > 0 || prevTotals.totalExpense > 0)) {
+    const profitDiff = netProfit - prevTotals.netProfit;
+    if (profitDiff > 0) {
+      insights.push(insightCard('good', 'Laba membaik dibanding bulan lalu',
+        `Laba bersih naik <strong>${rupiah(Math.abs(profitDiff))}</strong> dibanding ${esc(prevRangeLabel)}.`));
+    } else if (profitDiff < 0) {
+      insights.push(insightCard('bad', 'Laba menurun dibanding bulan lalu',
+        `Laba bersih turun <strong>${rupiah(Math.abs(profitDiff))}</strong> dibanding ${esc(prevRangeLabel)}.`));
+      const revDiff = totalRevenue - prevTotals.totalRevenue;
+      const expDiff = totalExpense - prevTotals.totalExpense;
+      if (expDiff > 0 && revDiff >= 0) {
+        recs.push(rekomendasiCard('tinggi', 'Kendalikan kenaikan pengeluaran',
+          `Pendapatan stabil/naik, tapi pengeluaran naik <strong>${rupiah(expDiff)}</strong> dibanding bulan lalu — telusuri kategori pengeluaran mana yang paling naik dan cari cara menekannya.`));
+      } else if (revDiff < 0) {
+        recs.push(rekomendasiCard('tinggi', 'Genjot kembali pendapatan',
+          `Penurunan laba terutama didorong turunnya pendapatan (<strong>${rupiah(Math.abs(revDiff))}</strong>) dibanding bulan lalu. Cek halaman Laporan untuk detail unit &amp; metode pembayaran yang menurun.`));
+      }
+    }
+  }
+
+  // 3) Struktur pengeluaran per kategori
+  if (expenseCategories.length && totalExpense > 0) {
+    const nonMisc = expenseCategories.filter(c => c.category !== 'Lainnya');
+    const top = (nonMisc[0] || expenseCategories[0]);
+    const topShare = totalExpense > 0 ? (top.amount / totalExpense * 100) : 0;
+    if (topShare >= 40) {
+      insights.push(insightCard('warn', `Pengeluaran didominasi kategori "${esc(top.category)}"`,
+        `Kategori ini menyumbang <strong>${topShare.toFixed(1)}%</strong> dari total pengeluaran (${rupiah(top.amount)}) bulan ini.`));
+      recs.push(rekomendasiCard('sedang', `Audit biaya kategori "${esc(top.category)}"`,
+        `Karena porsinya besar terhadap total pengeluaran, cek ulang rinciannya — apakah ada pemborosan, peluang nego harga ke supplier, atau perlu dijadwalkan ulang supaya lebih efisien.`));
+    }
+  }
+
+  // 4) Pola hari rugi dalam sebulan (dari tren harian)
+  if (trendData && Array.isArray(trendData.profitPerDay) && trendData.profitPerDay.length) {
+    const negativeDays = trendData.profitPerDay.filter(v => v < 0).length;
+    const totalDays = trendData.profitPerDay.length;
+    if (negativeDays >= Math.ceil(totalDays * 0.3)) {
+      insights.push(insightCard('warn', 'Banyak hari dengan laba harian negatif',
+        `Tercatat <strong>${negativeDays} dari ${totalDays} hari</strong> pada bulan ini pengeluaran harian melebihi pendapatan harian.`));
+      recs.push(rekomendasiCard('sedang', 'Cek pola pengeluaran harian',
+        `Bandingkan tanggal-tanggal rugi dengan jenis pengeluaran yang dicatat pada hari itu di grafik tren di atas — kemungkinan ada biaya besar (mis. maintenance/stok) yang bisa dijadwalkan di hari ramai supaya tidak menumpuk di hari sepi.`));
+    }
+  }
+
+  // 5) Kesenjangan/masalah kontribusi laba antar cabang (khusus tampilan Semua Cabang)
+  if (branchData && branchData.length > 1) {
+    const best = branchData[0];
+    const worst = branchData[branchData.length - 1];
+    if (worst.profit < 0) {
+      insights.push(insightCard('bad', `Cabang "${esc(worst.name)}" merugi bulan ini`,
+        `Cabang ini mencatat rugi <strong>${rupiah(Math.abs(worst.profit))}</strong>, sementara cabang terbaik "${esc(best.name)}" mencetak laba <strong>${rupiah(best.profit)}</strong>.`));
+      recs.push(rekomendasiCard('tinggi', `Investigasi cabang "${esc(worst.name)}"`,
+        `Cek utilisasi unit, biaya sewa tempat, dan pengeluaran operasional cabang ini secara khusus. Kalau kerugian berulang tiap bulan, pertimbangkan restrukturisasi biaya atau evaluasi kelayakan cabang.`));
+    } else if (best.profit > 0) {
+      const gapPct = (best.profit - worst.profit) / best.profit * 100;
+      if (gapPct >= 50) {
+        insights.push(insightCard('info', 'Kesenjangan performa antar cabang cukup lebar',
+          `Cabang "${esc(best.name)}" (${rupiah(best.profit)}) jauh lebih untung dibanding cabang "${esc(worst.name)}" (${rupiah(worst.profit)}) bulan ini.`));
+        recs.push(rekomendasiCard('rendah', `Tularkan strategi dari cabang "${esc(best.name)}"`,
+          `Pelajari apa yang membuat cabang ini lebih unggul (harga, promo, jam ramai, penataan unit) dan coba terapkan pola serupa di cabang yang masih tertinggal.`));
+      }
+    }
+  }
+
+  if (!recs.length) {
+    recs.push(rekomendasiCard('rendah', 'Kondisi keuangan relatif stabil',
+      `Tidak ada sinyal masalah signifikan pada laporan laba-rugi bulan ini. Terus pantau tren bulanan untuk deteksi dini kalau ada perubahan.`));
+  }
+  return { insights, recs };
+}
+
 function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   const bid = branchId || getLaporanBranchId();
   const showBranchCol = bid === "ALL";
@@ -4475,6 +4764,12 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
   <div class="rp-chart-box">${svgBranchProfitBarChart(branchData)}</div>` : ''}
   `;
 
+  const { insights: lrInsights, recs: lrRecs } = buildLabaRugiInsights({
+    totalRevenue, totalExpense, netProfit, profitMarginPct,
+    expenseCategories, prevTotals, prevRangeLabel: prevRange.label,
+    trendData, branchData,
+  });
+
   return `<div class="rp-stat-row">
     <div class="rp-stat-card"><span class="rp-stat-label">Total pendapatan</span><strong class="rp-mono rp-stat-value">${rupiah(totalRevenue)}</strong></div>
     <div class="rp-stat-card"><span class="rp-stat-label">Total pengeluaran</span><strong class="rp-mono rp-stat-value">${rupiah(totalExpense)}</strong></div>
@@ -4482,6 +4777,7 @@ function renderLabaRugiBody(period, unused, start, end, periodTx, branchId) {
     <div class="rp-stat-card"><span class="rp-stat-label">% Laba / rugi</span><strong class="rp-mono rp-stat-value" style="color:${netProfit>=0?'var(--rp-teal)':'var(--rp-red)'}">${netProfit>=0?'+':'-'}${Math.abs(profitMarginPct).toFixed(1)}%</strong></div>
   </div>
   ${chartsHtml}
+  ${renderInsightSection(lrInsights, lrRecs)}
   <div class="rp-ruled-head">Detail pendapatan</div>
   <div class="rp-table-wrap"><table class="rp-table"><thead><tr><th class="rp-th-no">No</th><th>Tanggal</th>${showBranchCol?'<th>Cabang</th>':''}<th>Unit</th><th>Penyewa</th><th>Durasi</th><th>Pembayaran</th><th>Jumlah</th></tr></thead>
   <tbody>${sortedRevenueTx.map((t,i)=>`<tr><td class="rp-mono rp-td-no">${i+1}</td><td>${fmtDateID(t.end)}</td>${showBranchCol?`<td>${esc(t.branchName||getBranchName(t.branchId))}</td>`:''}<td>${esc(t.unitName)}</td><td>${esc(t.customerName)}</td><td class="rp-mono">${(t.minutes/60).toFixed(1)} jam</td><td>${esc(t.payment||"-")}</td><td class="rp-mono">${rupiah(t.amount)}</td></tr>`).join("")||`<tr><td colspan="${revenueColCount}">${emptyState("Belum ada pendapatan pada periode ini.")}</td></tr>`}</tbody></table></div>
@@ -4592,6 +4888,12 @@ function renderLaporan() {
   window._laporanExportPeriod = selected.value;
   window._laporanExportLabel = selected.label;
 
+  const { insights: laporanInsights, recs: laporanRecs } = buildLaporanInsights({
+    totalRevenue, totalTx, avgPerTx, byUnit, byPayment,
+    totalDiscount, discountPct, nonPromoTx, subtotalDiffPct,
+    revenueDiff, revenueDiffPct, prevMonthTotal, prevMonthLabel,
+  });
+
   return `
     <div class="rp-page">
       ${pageHeaderBanner({
@@ -4668,6 +4970,8 @@ function renderLaporan() {
             <span class="rp-dim" style="display:block;margin-top:5px;font-size:10.5px;">${nonPromoTx.length===0 ? 'belum ada transaksi tanpa promo untuk dibandingkan' : (subtotalDiffPct>=0 ? 'promo dipakai di transaksi bernilai lebih besar — indikasi promo mendorong belanja lebih' : 'transaksi pakai promo justru lebih kecil — diskon lebih ke motong margin')}</span>
           </div>
         </div>`}
+
+      ${renderInsightSection(laporanInsights, laporanRecs)}
     </div>`;
 }
 
